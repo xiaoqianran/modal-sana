@@ -37,7 +37,7 @@ function defaultsFrom(meta) {
     seed: "",
     batch_size: 4,
     workers: 2,
-    format: "webp",
+    format: meta?.defaults?.image_format || "jpg",
     dry_run: false,
     prefer_deployed: meta?.defaults?.prefer_deployed !== false,
   };
@@ -86,7 +86,7 @@ function settingsGrid(d, meta) {
       ${field("seed", "Seed", d.seed)}
       ${field("batch_size", "GPU batch", d.batch_size, "number")}
       ${field("workers", "Workers", d.workers, "number")}
-      ${select("image_format", "Format", ["webp", "png", "jpg"], d.format)}
+      ${select("image_format", "Format", ["jpg", "png", "webp"], d.format)}
     </div>
     ${field("dry_run", "Dry run (no Modal / no GPU)", d.dry_run, "checkbox")}
     ${field("prefer_deployed", "Prefer deployed Modal app (memory snapshots)", d.prefer_deployed !== false, "checkbox")}
@@ -110,7 +110,7 @@ function formPayload(form) {
     seed: num("seed"),
     batch_size: Number(data.get("batch_size") || 4),
     workers: Number(data.get("workers") || 2),
-    image_format: data.get("image_format") || "webp",
+    image_format: data.get("image_format") || "jpg",
     dry_run: data.get("dry_run") === "on",
     prefer_deployed: data.get("prefer_deployed") === "on",
   };
@@ -118,7 +118,7 @@ function formPayload(form) {
 
 function jobPayload(form) {
   const payload = formPayload(form);
-  if (!payload.prefer_deployed) payload.deployed = false;
+  payload.deployed = payload.prefer_deployed !== false;
   delete payload.prefer_deployed;
   return payload;
 }
@@ -243,6 +243,7 @@ function listenJob(jobId) {
     if (["job.completed", "job.failed", "job.cancelled"].includes(event.type)) {
       setProgress(event.payload.completed_images || 0, event.payload.total_images || 0, event.payload.status);
       state.source.close();
+      if (event.type === "job.failed") alert(event.payload.error || "job failed");
       if (event.type === "job.completed") render("gallery");
     }
   };
@@ -760,14 +761,15 @@ lightbox.addEventListener("click", (event) => {
   try {
     const [doctor, meta] = await Promise.all([api("/api/doctor"), api("/api/meta")]);
     state.meta = meta;
+    const ver = meta.version ? `v${meta.version} · ` : "";
     if (!doctor.ready) {
-      railStatus.textContent = "modal not signed in";
+      railStatus.textContent = `${ver}modal not signed in`;
       railStatus.className = "rail-foot bad";
     } else if (meta.runtime?.available) {
-      railStatus.textContent = "deployed · snapshots on";
+      railStatus.textContent = `${ver}deployed · snapshots on`;
       railStatus.className = "rail-foot ok";
     } else {
-      railStatus.textContent = "ephemeral · run modal deploy";
+      railStatus.textContent = `${ver}deploy first · ${meta.runtime?.deploy_command || "modal deploy"}`;
       railStatus.className = "rail-foot bad";
     }
   } catch {

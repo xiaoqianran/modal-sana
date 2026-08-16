@@ -48,7 +48,7 @@ def benchmark(
             batch_size=batch_size,
             workers=workers,
             retry=1,
-            image_format="webp",
+            image_format="jpg",
             quality=90,
             negative="",
             dry_run=dry_run,

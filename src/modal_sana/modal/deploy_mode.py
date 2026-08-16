@@ -8,12 +8,11 @@ from modal_sana.core.doctor import modal_workspace
 from modal_sana.modal.links import deployed_app_url
 
 DeployReason = Literal[
+    "default-deployed",
     "required",
     "env-required",
     "forced-ephemeral",
     "env-ephemeral",
-    "auto-found",
-    "auto-missing",
 ]
 DeployPath = Literal["deployed", "ephemeral"]
 
@@ -37,9 +36,9 @@ def env_truthy(name: str) -> bool:
 def deployed_app_available(app_name: str | None = None) -> tuple[bool, str | None]:
     """True when ``SanaWorker`` exists on the named deployed app.
 
-    Does not cache — a long-lived web process should see a deploy that
-    happened after it started. Callers that need many lookups in one
-    request should reuse the returned tuple themselves.
+    Only ``NotFoundError`` means "not deployed". Any other exception is
+    returned as an error string so the UI can show it — the generate path
+    must not treat those as "use ephemeral".
     """
     import modal
     from modal.exception import NotFoundError
@@ -53,6 +52,17 @@ def deployed_app_available(app_name: str | None = None) -> tuple[bool, str | Non
         return False, str(exc)
     except Exception as exc:  # noqa: BLE001
         return False, f"{type(exc).__name__}: {exc}"
+
+
+def missing_app_message(app_name: str, detail: str | None = None) -> str:
+    hint = detail or "SanaWorker not found"
+    return (
+        f"Deployed Modal app '{app_name}' was not found ({hint}). "
+        f"Generate does not use `modal serve` and will not silently start "
+        f"an ephemeral `app.run()` (that path disables memory snapshots). "
+        f"Deploy with:\n\n  {DEPLOY_COMMAND}\n\n"
+        "Or pass --ephemeral / uncheck the deployed-app box for a one-off run."
+    )
 
 
 @dataclass(frozen=True)
@@ -89,39 +99,23 @@ class DeployDecision:
 def resolve_deploy_mode(requested: bool | None = None) -> DeployDecision:
     """Pick deployed vs ephemeral.
 
-    * ``requested=True`` / ``MODAL_SANA_DEPLOYED=1`` — require the deployed app.
-    * ``requested=False`` / ``MODAL_SANA_EPHEMERAL=1`` — force ``app.run()``.
-    * otherwise probe: use deployed when ``SanaWorker`` exists.
+    Default is **deployed**. There is no silent fallback to ``app.run()`` —
+    that is what printed "Memory snapshots are disabled for ephemeral apps"
+    after a successful ``modal deploy``.
 
-    ``MODAL_SANA_DEPLOYED=0`` is *not* a force-ephemeral switch. That used to
-    be the example-file default and only meant "do not require deploy".
+    * ``requested=False`` / ``MODAL_SANA_EPHEMERAL=1`` — force ``app.run()``.
+    * anything else — call the deployed app. Missing app fails at first use.
     """
     name = deployed_app_name()
     if requested is False:
         return DeployDecision(False, "forced-ephemeral", name)
-    if requested is True:
-        return _require(name, "required")
-    if env_truthy("MODAL_SANA_EPHEMERAL"):
+    if env_truthy("MODAL_SANA_EPHEMERAL") and requested is not True:
         return DeployDecision(False, "env-ephemeral", name)
+    if requested is True:
+        return DeployDecision(True, "required", name)
     if env_truthy("MODAL_SANA_DEPLOYED"):
-        return _require(name, "env-required")
-    available, error = deployed_app_available(name)
-    if available:
-        return DeployDecision(True, "auto-found", name, available=True)
-    return DeployDecision(False, "auto-missing", name, available=False, error=error)
-
-
-def _require(name: str, reason: DeployReason) -> DeployDecision:
-    available, error = deployed_app_available(name)
-    if not available:
-        hint = error or "SanaWorker not found"
-        raise DeployedAppMissing(
-            f"Deployed Modal app '{name}' was not found ({hint}). "
-            f"Memory snapshots only work on a deployed app, not `modal serve` "
-            f"and not an ephemeral `app.run()`. Deploy with:\n\n  {DEPLOY_COMMAND}\n\n"
-            "Or pass --ephemeral / uncheck the deployed-app box to use a one-off run."
-        )
-    return DeployDecision(True, reason, name, available=True)
+        return DeployDecision(True, "env-required", name)
+    return DeployDecision(True, "default-deployed", name)
 
 
 def inspect_deploy_target() -> dict[str, Any]:
@@ -129,23 +123,25 @@ def inspect_deploy_target() -> dict[str, Any]:
     name = deployed_app_name()
     available, error = deployed_app_available(name)
     if env_truthy("MODAL_SANA_EPHEMERAL"):
-        preference: str = "ephemeral"
+        preference = "ephemeral"
         would_use: DeployPath = "ephemeral"
-    elif env_truthy("MODAL_SANA_DEPLOYED"):
-        preference = "require"
-        would_use = "deployed" if available else "ephemeral"
     else:
-        preference = "auto"
-        would_use = "deployed" if available else "ephemeral"
-    if available:
+        preference = "deployed"
+        would_use = "deployed"
+    if would_use == "ephemeral":
         note = (
-            f"Found deployed app '{name}'. Generate/prefetch will call it "
-            "(CPU memory snapshots on). This local web is not `modal serve`."
+            f"MODAL_SANA_EPHEMERAL is set. Generate will use a one-off "
+            f"`app.run()` and Modal will disable memory snapshots."
+        )
+    elif available:
+        note = (
+            f"Found deployed app '{name}'. Generate calls it (CPU memory "
+            "snapshots on). This local web is not `modal serve`."
         )
     else:
         note = (
-            f"No deployed '{name}' app. Generate will use a one-off ephemeral "
-            f"`app.run()` and Modal will disable memory snapshots. Fix: {DEPLOY_COMMAND}"
+            f"No deployed '{name}' app yet. Generate will error until you run "
+            f"{DEPLOY_COMMAND} — it will not silently use ephemeral."
         )
         if error:
             note = f"{note} ({error})"
@@ -155,7 +151,7 @@ def inspect_deploy_target() -> dict[str, Any]:
         "error": error,
         "preference": preference,
         "would_use": would_use,
-        "snapshots": would_use == "deployed",
+        "snapshots": would_use == "deployed" and available,
         "note": note,
         "deploy_command": DEPLOY_COMMAND,
         "not_modal_serve": True,
