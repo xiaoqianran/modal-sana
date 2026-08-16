@@ -67,17 +67,34 @@ def test_cost_page_is_first_class() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     assert 'data-page="cost"' in html
+    assert 'href="/cost"' in html
     assert "费用" in html
     assert "async function costPage" in js
+    assert "function paintCost" in js
+    assert "function go" in js
     assert "function formatRate" in js
     assert "include_ledger: \"false\"" in js
     assert "renderChain" in js
-    assert "#/cost" in js
+    assert 'go(`/cost' in js or 'go("/cost' in js
     assert "event-head" in js
     assert "function shortId" in js
     assert "cap-prompt" in js
     assert "lightbox-stage" in js
     assert "tableWrap" in js
+
+
+def test_spa_pages_are_real_http_routes() -> None:
+    client = TestClient(app)
+    for path in ("/", "/generate", "/batch", "/gallery", "/jobs", "/cost", "/benchmark", "/settings"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert "zh-CN" in response.text
+        assert 'href="/cost"' in response.text
+    job = client.get("/job/job_example")
+    assert job.status_code == 200
+    assert "zh-CN" in job.text
+    missing = client.get("/not-a-page")
+    assert missing.status_code == 404
 
 
 def test_workers_default_is_one_gpu() -> None:
