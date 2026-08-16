@@ -20,12 +20,18 @@ def ensure_local_app_objects() -> None:
     ``Function has not been hydrated``.
     """
     from modal_sana.modal.ledger import archive_cost_events, list_cost_events
-    from modal_sana.modal.prefetch import list_volume_models, prefetch_model, registered_model_ids
+    from modal_sana.modal.prefetch import (
+        list_volume_models,
+        prefetch_model,
+        prefetch_progress,
+        registered_model_ids,
+    )
     from modal_sana.modal.worker import SanaWorker
 
     _ = (
         SanaWorker,
         prefetch_model,
+        prefetch_progress,
         list_volume_models,
         registered_model_ids,
         archive_cost_events,
@@ -224,11 +230,27 @@ def _make_worker(model: str, options: dict[str, Any], *, deployed: bool) -> Any:
 
 
 def _prefetch_on_cpu(model: str, secrets: list[Any], *, deployed: bool) -> dict[str, Any]:
-    """CPU container writes weights to the Volume. GPU never hits the network."""
+    """CPU container writes weights to the Volume. GPU never hits the network.
+
+    Complete Volume snapshots are not fetched again.
+    """
     import modal
 
     from modal_sana.modal.prefetch import prefetch_model
+    from modal_sana.modal.weights import ids_needing_prefetch
 
+    rows = _volume_rows(deployed)
+    needed, cached = ids_needing_prefetch([model], rows)
+    if cached and not needed:
+        row = next((item for item in rows if item.get("model_id") == model), {})
+        return {
+            "model_id": model,
+            "status": "cached",
+            "path": row.get("path"),
+            "bytes": row.get("bytes"),
+            "device": "cpu",
+            "skipped": True,
+        }
     if deployed:
         fn = modal.Function.from_name(
             os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
@@ -238,6 +260,24 @@ def _prefetch_on_cpu(model: str, secrets: list[Any], *, deployed: bool) -> dict[
     if secrets:
         return prefetch_model.with_options(secrets=secrets).remote(model)
     return prefetch_model.remote(model)
+
+
+def _volume_rows(deployed: bool) -> list[dict[str, Any]]:
+    import modal
+
+    from modal_sana.modal.prefetch import list_volume_models
+
+    try:
+        if deployed:
+            rows = modal.Function.from_name(
+                os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
+                "list_volume_models",
+            ).remote()
+        else:
+            rows = list_volume_models.remote()
+    except Exception:
+        return []
+    return list(rows or [])
 
 
 def _iter_results(
