@@ -88,6 +88,11 @@ class ModalSanaGenerator:
         secrets = modal_download_secrets()
         decision = resolve_deploy_mode(deployed)
         use_deployed = decision.use_deployed
+        print(
+            f"modal-sana: Modal path={decision.mode} ({decision.reason}) "
+            f"app={decision.app_name}",
+            flush=True,
+        )
         started = time.perf_counter()
         self.last_meta.update(
             {
@@ -99,16 +104,23 @@ class ModalSanaGenerator:
             }
         )
         if use_deployed:
-            yield from _dispatch(
-                payloads,
-                gpu=spec.id,
-                workers=workers,
-                retry=retry,
-                default_model=model,
-                secrets=secrets,
-                deployed=True,
-                meta=self.last_meta,
-            )
+            from modal.exception import NotFoundError
+
+            from modal_sana.modal.deploy_mode import DeployedAppMissing, missing_app_message
+
+            try:
+                yield from _dispatch(
+                    payloads,
+                    gpu=spec.id,
+                    workers=workers,
+                    retry=retry,
+                    default_model=model,
+                    secrets=secrets,
+                    deployed=True,
+                    meta=self.last_meta,
+                )
+            except NotFoundError as exc:
+                raise DeployedAppMissing(missing_app_message(decision.app_name, str(exc))) from exc
             self.last_meta.update(
                 {
                     "deployed": True,

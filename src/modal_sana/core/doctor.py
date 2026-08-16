@@ -78,7 +78,7 @@ def run_doctor() -> DoctorReport:
             report.add(
                 "Deployed app",
                 False,
-                f"{name} missing — ephemeral app.run() has no snapshots. {DEPLOY_COMMAND}"
+                f"{name} missing — Generate will error until you deploy. {DEPLOY_COMMAND}"
                 + (f" ({detail})" if detail else ""),
             )
     except Exception as exc:  # noqa: BLE001

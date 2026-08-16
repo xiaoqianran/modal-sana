@@ -16,7 +16,7 @@ class GenerateRequest(BaseModel):
     steps: int = 2
     guidance: float = 4.5
     model: str = "sana-sprint-1.6b"
-    image_format: str = "webp"
+    image_format: str = "jpg"
     quality: int = 90
     job_id: str = ""
     requested_gpu: str = ""

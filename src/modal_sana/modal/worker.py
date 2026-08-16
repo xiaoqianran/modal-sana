@@ -148,7 +148,7 @@ class SanaWorker:
                 int(item["height"]),
                 int(item["steps"]),
                 round(float(item["guidance"]), 4),
-                item.get("image_format", "webp"),
+                item.get("image_format", "jpg"),
                 int(item.get("quality", 90)),
             )
             grouped.setdefault(key, []).append(item)

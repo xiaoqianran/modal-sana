@@ -39,8 +39,7 @@ OptDeployed = Annotated[
         "--deployed/--ephemeral",
         help=(
             "Call the deployed Modal app (snapshots) or force a one-off "
-            "ephemeral app.run(). Default: deployed if it exists. "
-            "This is not modal serve."
+            "ephemeral app.run(). Default: deployed. This is not modal serve."
         ),
     ),
 ]

@@ -102,7 +102,7 @@ uv run modal-sana resume job_01K...
 uv run modal-sana web
 ```
 
-默认：`sana-sprint-1.6b` · `L40S` · `1024×1024` · `2 steps` · `webp`。
+默认：`sana-sprint-1.6b` · `L40S` · `1024×1024` · `2 steps` · `jpg`。
 
 ```bash
 uv run modal-sana models
@@ -120,9 +120,11 @@ uv run modal-sana benchmark --gpu L40S,RTX-PRO-6000 --count 8
 
 | 方式 | 谁启动 | 快照 |
 | --- | --- | --- |
-| **deployed**（默认，如果已经 deploy 过） | 你先 `modal deploy`，本地只 `from_name` 调用 | 有 |
-| **ephemeral** `app.run()` | 每次 Generate 起一个一次性 App | 无，会看到 *Memory snapshots are disabled for ephemeral apps* |
+| **deployed**（默认） | 你先 `modal deploy`，本地只 `from_name` 调用 | 有 |
+| **ephemeral** `app.run()` | 仅 `--ephemeral` / 取消勾选 | 无，会看到 *Memory snapshots are disabled for ephemeral apps* |
 | `modal serve` | 本仓库不用 | — |
+
+查找失败时 **不会再默默回退 ephemeral**。没 deploy 过会直接报错，而不是再起一个 `ap-...` 一次性 App。
 
 ```bash
 # 做一次（改 worker 代码后要重新 deploy，快照才生效）
@@ -157,7 +159,7 @@ data/
 ├── modal-sana.db          # Job / PromptTask / Generation / Image / TraceSpan
 └── outputs/
     └── job_01K.../
-        ├── 000001.webp
+        ├── 000001.jpg
         └── metadata.jsonl
 ```
 
