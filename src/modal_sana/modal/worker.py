@@ -7,7 +7,9 @@ import modal
 from modal_sana.core.cost import item_gpu_seconds
 from modal_sana.modal.app import app
 from modal_sana.modal.image import image
+from modal_sana.modal.prefetch import list_volume_models, prefetch_model
 from modal_sana.modal.volumes import CACHE_DIR, huggingface_cache_volume
+from modal_sana.modal.weights import assert_model_ready
 from modal_sana.models.sana.registry import get_model
 
 MINUTES = 60
@@ -34,7 +36,8 @@ def _load_pipeline(model_id: str):
         from diffusers import SanaPipeline
 
         pipeline_cls = SanaPipeline
-    pipe = pipeline_cls.from_pretrained(spec.hf_id, torch_dtype=dtype)
+    path = assert_model_ready(model_id)
+    pipe = pipeline_cls.from_pretrained(str(path), torch_dtype=dtype, local_files_only=True)
     pipe.to("cuda")
     if hasattr(pipe, "vae") and pipe.vae is not None:
         pipe.vae.to(dtype)
@@ -60,6 +63,10 @@ def _encode(image, image_format: str, quality: int) -> bytes:
 class SanaWorker:
     """One warm GPU container = one loaded SANA pipeline.
 
+    Weights must already be on the Volume (CPU ``prefetch_model``).
+    This class only loads from ``/cache/models/{id}`` with
+    ``local_files_only=True`` — it never downloads from Hugging Face.
+
     GPU type and max_containers are applied at the call site with
     `SanaWorker.with_options(gpu=..., max_containers=...)`.
     After the last input, Modal may keep this container (GPU + its CPU)
@@ -70,6 +77,7 @@ class SanaWorker:
 
     @modal.enter()
     def load_pipeline(self) -> None:
+        huggingface_cache_volume().reload()
         started = time.perf_counter()
         self.pipe = _load_pipeline(self.model_id)
         self._load_ms = (time.perf_counter() - started) * 1000
@@ -256,3 +264,8 @@ def _vram_mb() -> float | None:
     except Exception:
         return None
     return None
+
+
+# Register CPU prefetch on the same App so `modal deploy -m modal_sana.modal.worker` includes it.
+_ = prefetch_model
+_ = list_volume_models

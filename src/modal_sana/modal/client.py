@@ -54,6 +54,7 @@ class ModalSanaGenerator:
         use_deployed = deployed or os.environ.get("MODAL_SANA_DEPLOYED") == "1"
         started = time.perf_counter()
         if use_deployed:
+            prefetch_meta = _prefetch_on_cpu(model, secrets, deployed=True)
             cls = modal.Cls.from_name(
                 os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
                 "SanaWorker",
@@ -67,6 +68,7 @@ class ModalSanaGenerator:
                     "map_wall_ms": (time.perf_counter() - started) * 1000,
                     "gpu": gpu,
                     "model": model,
+                    "prefetch": prefetch_meta,
                 }
             )
             return
@@ -75,6 +77,8 @@ class ModalSanaGenerator:
             with app.run():
                 self.last_meta["modal_app_id"] = app.app_id
                 self.last_meta["modal_run_url"] = app_run_url(app.app_id, modal_workspace())
+                prefetch_meta = _prefetch_on_cpu(model, secrets, deployed=False)
+                self.last_meta["prefetch"] = prefetch_meta
                 worker = SanaWorker.with_options(**options)(model_id=model)
                 yield from _iter_results(worker, payloads, meta=self.last_meta)
         self.last_meta.update(
@@ -85,6 +89,23 @@ class ModalSanaGenerator:
                 "model": model,
             }
         )
+
+
+def _prefetch_on_cpu(model: str, secrets: list[Any], *, deployed: bool) -> dict[str, Any]:
+    """CPU container writes weights to the Volume. GPU never hits the network."""
+    import modal
+
+    from modal_sana.modal.prefetch import prefetch_model
+
+    if deployed:
+        fn = modal.Function.from_name(
+            os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
+            "prefetch_model",
+        )
+        return fn.remote(model)
+    if secrets:
+        return prefetch_model.with_options(secrets=secrets).remote(model)
+    return prefetch_model.remote(model)
 
 
 def _iter_results(

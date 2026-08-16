@@ -32,6 +32,9 @@ def test_models_and_jobs(tmp_path: Path, monkeypatch) -> None:
     assert runner.invoke(app, ["gpus"]).exit_code == 0
     listed = runner.invoke(app, ["jobs"])
     assert listed.exit_code == 0
+    help_prefetch = runner.invoke(app, ["prefetch", "--help"])
+    assert help_prefetch.exit_code == 0, help_prefetch.output
+    assert "CPU" in help_prefetch.output or "Volume" in help_prefetch.output
 
 
 def test_trace_and_cost(tmp_path: Path, monkeypatch) -> None:
