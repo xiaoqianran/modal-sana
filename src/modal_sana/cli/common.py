@@ -29,7 +29,7 @@ OptSeed = Annotated[int | None, typer.Option("--seed", help="Base seed; count ex
 OptBatch = Annotated[int, typer.Option("--batch-size", help="Images per GPU forward")]
 OptWorkers = Annotated[int, typer.Option("--workers", help="Concurrent Modal GPU containers")]
 OptRetry = Annotated[int, typer.Option("--retry", help="Local retries after Modal gives up")]
-OptFormat = Annotated[str, typer.Option("--format", help="webp | png | jpg")]
+OptFormat = Annotated[str, typer.Option("--format", help="png | jpg | webp")]
 OptQuality = Annotated[int, typer.Option("--quality", help="WebP/JPEG quality")]
 OptNegative = Annotated[str, typer.Option("--negative", help="Negative prompt")]
 OptDryRun = Annotated[bool, typer.Option("--dry-run", help="Local placeholder images, no GPU")]

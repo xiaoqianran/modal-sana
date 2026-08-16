@@ -39,7 +39,7 @@ def generate(
     batch_size: OptBatch = 4,
     workers: OptWorkers = 2,
     retry: OptRetry = 3,
-    image_format: OptFormat = "jpg",
+    image_format: OptFormat = "png",
     quality: OptQuality = 90,
     negative: OptNegative = "",
     dry_run: OptDryRun = False,

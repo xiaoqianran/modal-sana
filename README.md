@@ -102,7 +102,7 @@ uv run modal-sana resume job_01K...
 uv run modal-sana web
 ```
 
-默认：`sana-sprint-1.6b` · `L40S` · `1024×1024` · `2 steps` · `jpg`。
+默认：`sana-sprint-1.6b` · `L40S` · `1024×1024` · `2 steps` · `png`。
 
 ```bash
 uv run modal-sana models
@@ -150,7 +150,7 @@ data/
 ├── modal-sana.db          # Job / PromptTask / Generation / Image / TraceSpan
 └── outputs/
     └── job_01K.../
-        ├── 000001.jpg
+        ├── 000001.png
         └── metadata.jsonl
 ```
 

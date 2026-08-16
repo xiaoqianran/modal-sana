@@ -34,7 +34,7 @@ def test_create_job_and_gallery(tmp_path, monkeypatch) -> None:
     image_id = gallery.json()["items"][0]["id"]
     file = client.get(f"/api/images/{image_id}/file")
     assert file.status_code == 200
-    assert file.content[:2] == b"\xff\xd8"
+    assert file.content[:4] == b"\x89PNG"
     cost = client.get(f"/api/jobs/{job_id}/cost")
     assert cost.status_code == 200
     assert cost.json()["cost_usd"] == 0
@@ -69,7 +69,7 @@ def test_meta_and_health(monkeypatch) -> None:
     assert meta["runtime"]["would_use"] == "deployed"
     assert meta["runtime"]["not_modal_serve"] is True
     assert meta["defaults"]["prefer_deployed"] is True
-    assert meta["defaults"]["image_format"] == "jpg"
+    assert meta["defaults"]["image_format"] == "png"
     assert meta["version"]
 
 

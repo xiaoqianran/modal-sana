@@ -23,7 +23,7 @@ class JobConfig(BaseModel):
     batch_size: int = 4
     workers: int = 2
     retry: int = 3
-    image_format: ImageFormat = "jpg"
+    image_format: ImageFormat = "png"
     quality: int = 90
     negative_prompt: str = ""
     dry_run: bool = False
@@ -59,7 +59,7 @@ class GenerationSpec(BaseModel):
     guidance: float
     width: int
     height: int
-    image_format: ImageFormat = "jpg"
+    image_format: ImageFormat = "png"
     quality: int = 90
     task_hash: str
     status: TaskStatus = "pending"
