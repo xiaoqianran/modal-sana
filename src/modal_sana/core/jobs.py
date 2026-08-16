@@ -8,7 +8,7 @@ from typing import Any
 from sqlmodel import col, select
 
 from modal_sana.core.config import Settings
-from modal_sana.core.cost import cost_for_seconds, format_usd
+from modal_sana.core.cost import cost_for_seconds, cost_formula, format_rate, format_usd
 from modal_sana.core.events import Event, EventBus
 from modal_sana.core.generator import GenerateRequest, GenerateResult, ImageGenerator
 from modal_sana.core.hashes import task_hash
@@ -270,41 +270,68 @@ class JobService:
 
     def cost_report(self, job_id: str) -> dict[str, Any]:
         job = self.get_job(job_id)
-        spec = get_gpu(job.gpu)
         with self.db.session() as session:
             generations = list(session.exec(select(GenerationRow).where(GenerationRow.job_id == job_id)))
-        by_generation = [
-            {
-                "generation_id": item.id,
-                "status": item.status,
-                "gpu_seconds": item.gpu_seconds,
-                "cost_usd": item.cost_usd,
-                "load_ms": item.load_ms,
-                "infer_ms": item.infer_ms,
-                "encode_ms": item.encode_ms,
-                "vram_allocated_mb": item.vram_allocated_mb,
-                "vram_reserved_mb": item.vram_reserved_mb,
-                "vram_peak_mb": item.vram_peak_mb,
-                "modal_function_call_id": item.modal_function_call_id,
-                "modal_input_id": item.modal_input_id,
-            }
-            for item in generations
-        ]
+        billed = job.gpu
+        for item in generations:
+            extra = _parse_extra(item.extra_json)
+            if extra.get("actual_gpu"):
+                billed = str(extra["actual_gpu"])
+                break
+        try:
+            spec = get_gpu(billed)
+        except ValueError:
+            spec = get_gpu(job.gpu)
+        by_generation = []
+        for item in generations:
+            extra = _parse_extra(item.extra_json)
+            gpu = str(extra.get("actual_gpu") or extra.get("requested_gpu") or item.gpu)
+            try:
+                rate = get_gpu(gpu).usd_per_second
+            except ValueError:
+                rate = spec.usd_per_second
+                gpu = spec.id
+            seconds = float(item.gpu_seconds or 0.0)
+            by_generation.append(
+                {
+                    "generation_id": item.id,
+                    "status": item.status,
+                    "gpu": gpu,
+                    "gpu_seconds": item.gpu_seconds,
+                    "usd_per_second": rate,
+                    "rate_display": format_rate(rate),
+                    "formula": cost_formula(gpu, seconds, rate, item.cost_usd),
+                    "cost_usd": item.cost_usd,
+                    "load_ms": item.load_ms,
+                    "infer_ms": item.infer_ms,
+                    "encode_ms": item.encode_ms,
+                    "vram_allocated_mb": item.vram_allocated_mb,
+                    "vram_reserved_mb": item.vram_reserved_mb,
+                    "vram_peak_mb": item.vram_peak_mb,
+                    "modal_function_call_id": item.modal_function_call_id,
+                    "modal_input_id": item.modal_input_id,
+                }
+            )
+        seconds = job.gpu_seconds or sum(item.gpu_seconds or 0.0 for item in generations)
+        cost = job.cost_usd or sum(item.cost_usd or 0.0 for item in generations)
         return {
             "job_id": job_id,
-            "gpu": job.gpu,
+            "gpu": billed,
+            "requested_gpu": job.gpu,
             "usd_per_second": spec.usd_per_second,
             "usd_per_hour": spec.usd_per_hour,
-            "gpu_seconds": job.gpu_seconds or sum(item.gpu_seconds or 0.0 for item in generations),
-            "cost_usd": job.cost_usd or sum(item.cost_usd or 0.0 for item in generations),
-            "cost_display": format_usd(job.cost_usd or 0.0),
+            "rate_display": format_rate(spec.usd_per_second),
+            "formula": cost_formula(billed, float(seconds or 0.0), spec.usd_per_second, cost),
+            "gpu_seconds": seconds,
+            "cost_usd": cost,
+            "cost_display": format_usd(cost or 0.0),
             "dry_run": job.dry_run,
             "modal_app_id": job.modal_app_id,
             "modal_run_url": job.modal_run_url,
             "by_generation": by_generation,
             "notes": (
-                "List-price estimate: GPU seconds × Modal published $/s. "
-                "Includes load (first call on a container), infer, and encode. "
+                "List-price estimate: billed GPU-seconds × Modal published $/s. "
+                "gpu_load is the cold container load; gpu_generate is infer+encode. "
                 "Excludes image-build CPU and scaledown idle. "
                 "Compare with `modal billing report` for invoice truth."
             ),

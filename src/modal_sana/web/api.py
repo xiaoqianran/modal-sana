@@ -158,6 +158,7 @@ def cost_forecast(
     period: str = "day",
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=200),
+    include_ledger: bool = Query(True),
 ) -> dict[str, Any]:
     grain: Period = period if period in PERIODS else "day"  # type: ignore[assignment]
     try:
@@ -184,9 +185,11 @@ def cost_forecast(
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    ledger = safe_query_shared_ledger(period=grain, page=page, per_page=per_page)
-    if history_error and not ledger.get("error"):
-        ledger["error"] = history_error
+    ledger = None
+    if include_ledger:
+        ledger = safe_query_shared_ledger(period=grain, page=page, per_page=per_page)
+        if history_error and not ledger.get("error"):
+            ledger["error"] = history_error
     return {
         "predict": predict,
         "balance": workspace_balance(),
@@ -202,6 +205,7 @@ def cost_ledger(
     kind: str | None = None,
     model: str | None = None,
     gpu: str | None = None,
+    job_id: str | None = None,
 ) -> dict[str, Any]:
     grain: Period = period if period in PERIODS else "all"  # type: ignore[assignment]
     return safe_query_shared_ledger(
@@ -211,6 +215,7 @@ def cost_ledger(
         kind=kind,
         model=model,
         gpu=gpu,
+        job_id=job_id,
     )
 
 

@@ -45,3 +45,6 @@ def test_cost_report_localizes_generations(service: JobService) -> None:
     assert report["gpu"] == "L40S"
     assert len(report["by_generation"]) == 1
     assert report["by_generation"][0]["generation_id"].startswith("gen_")
+    assert "formula" in report
+    assert report["usd_per_second"] > 0
+    assert report["by_generation"][0]["usd_per_second"] > 0

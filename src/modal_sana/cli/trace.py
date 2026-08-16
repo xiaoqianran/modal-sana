@@ -7,7 +7,7 @@ from rich.pretty import Pretty
 from rich.table import Table
 
 from modal_sana.cli.common import console, service
-from modal_sana.core.cost import format_usd
+from modal_sana.core.cost import format_rate, format_usd
 from modal_sana.core.trace import format_span_tree, list_spans
 from modal_sana.modal.gpu import list_gpus
 
@@ -34,9 +34,9 @@ def trace(
 
 
 def cost(
-    job_id: Annotated[str | None, typer.Argument(help="Job id. Omit for GPU rates + last job.")] = None,
+    job_id: Annotated[str | None, typer.Argument(help="Job id. Omit for rates + every Modal charge today.")] = None,
 ) -> None:
-    """Show estimated Modal GPU cost. Per-cent tracking from list prices."""
+    """Every Modal GPU charge: seconds × published $/s, call chain, matching job."""
     svc = service()
     if job_id is None:
         _print_rate_table()
@@ -50,9 +50,11 @@ def cost(
         report = svc.cost_report(job_id)
     except KeyError as exc:
         raise typer.BadParameter(f"unknown job {job_id}") from exc
-    console.print(f"GPU: {report['gpu']}  ·  {format_usd(report['usd_per_second'])}/s")
+    console.print(f"GPU: {report['gpu']}  ·  {report.get('rate_display') or format_rate(report.get('usd_per_second'))}")
     console.print(f"charged GPU seconds: {report['gpu_seconds']:.4f}")
     console.print(f"estimated cost: {report['cost_display']}")
+    if report.get("formula"):
+        console.print(report["formula"])
     if report.get("modal_run_url"):
         console.print(f"Modal run: {report['modal_run_url']}")
     if report.get("dry_run"):
@@ -65,6 +67,7 @@ def cost(
     table.add_column("ENCODE")
     table.add_column("VRAM")
     table.add_column("GPU-S")
+    table.add_column("$/s")
     table.add_column("$")
     table.add_column("INPUT")
     for item in report["by_generation"]:
@@ -76,10 +79,15 @@ def cost(
             _ms(item.get("encode_ms")),
             _vram(item),
             f"{item.get('gpu_seconds') or 0:.4f}",
+            f"{(item.get('usd_per_second') or 0):.6f}" if item.get("usd_per_second") is not None else "—",
             format_usd(item.get("cost_usd")),
             item.get("modal_input_id") or "—",
         )
     console.print(table)
+    for item in report["by_generation"]:
+        if item.get("formula"):
+            console.print(f"[dim]{item['generation_id']}  {item['formula']}[/dim]")
+    _print_job_ledger_events(job_id)
     console.print(f"\n[dim]{report['notes']}[/dim]")
 
 
@@ -99,7 +107,7 @@ def _print_workspace_ledger() -> None:
         )
     else:
         console.print(f"\n[dim]Modal balance: {balance.get('error') or 'unavailable'}[/dim]")
-    ledger = safe_query_shared_ledger(period="day", page=1, per_page=8)
+    ledger = safe_query_shared_ledger(period="day", page=1, per_page=20)
     snaps = ledger.get("snapshots") or {}
     if snaps:
         console.print(
@@ -109,8 +117,53 @@ def _print_workspace_ledger() -> None:
                 for grain in ("hour", "day", "week", "month")
             )
         )
+    _print_ledger_event_table(ledger.get("items") or [], title="Today's Modal charges")
     if ledger.get("error"):
         console.print(f"[dim]{ledger['error']}[/dim]")
+
+
+def _print_job_ledger_events(job_id: str) -> None:
+    try:
+        from modal_sana.modal.ledger import safe_query_shared_ledger
+    except Exception:
+        return
+    ledger = safe_query_shared_ledger(period="all", page=1, per_page=50, job_id=job_id)
+    items = ledger.get("items") or []
+    if not items:
+        return
+    _print_ledger_event_table(items, title="Modal charges for this job")
+
+
+def _print_ledger_event_table(items: list[dict], *, title: str) -> None:
+    if not items:
+        return
+    table = Table(title=title)
+    table.add_column("TIME")
+    table.add_column("KIND")
+    table.add_column("JOB")
+    table.add_column("GPU")
+    table.add_column("$/s")
+    table.add_column("GPU-S")
+    table.add_column("$")
+    table.add_column("CHAIN")
+    for item in items:
+        chain = item.get("chain") or []
+        chain_text = " → ".join(
+            str(step.get("detail") or step.get("name") or "")
+            for step in chain
+            if step.get("kind") in {"function_call", "input", "gpu_load", "gpu_generate", "job"}
+        )
+        table.add_row(
+            str(item.get("ts") or "").replace("T", " ")[:19],
+            str(item.get("kind") or ""),
+            str(item.get("job_id") or "—"),
+            str(item.get("billed_gpu") or item.get("actual_gpu") or item.get("requested_gpu") or "—"),
+            f"{item['usd_per_second']:.6f}" if item.get("usd_per_second") is not None else "—",
+            f"{float(item.get('gpu_seconds') or 0):.4f}",
+            format_usd(item.get("cost_usd")),
+            chain_text or "—",
+        )
+    console.print(table)
 
 
 def _print_rate_table() -> None:
