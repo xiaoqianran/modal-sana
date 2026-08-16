@@ -106,9 +106,10 @@ uv run modal-sana web
 
 ```bash
 uv run modal-sana models
-uv run modal-sana prefetch                 # CPU 把默认模型拉进 Volume
-uv run modal-sana prefetch --status
+uv run modal-sana prefetch                 # CPU 并行下载全部 SANA 到 Volume
+uv run modal-sana prefetch sana-sprint-1.6b
 uv run modal-sana prefetch --all
+uv run modal-sana prefetch --status
 uv run modal-sana gpus
 uv run modal-sana benchmark --gpu L40S,RTX-PRO-6000 --count 8
 ```

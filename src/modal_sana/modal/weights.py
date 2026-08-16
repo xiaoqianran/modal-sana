@@ -17,6 +17,13 @@ def is_model_ready(model_id: str, *, root: str | Path | None = None) -> bool:
     return (local_model_path(model_id, root=root) / "model_index.json").is_file()
 
 
+def models_to_prefetch(model: str | None, *, all_models: bool = False) -> list[str]:
+    """Default is every registered SANA model. A name pins one snapshot."""
+    if all_models or not (model or "").strip():
+        return [spec.id for spec in list_models()]
+    return [get_model(model.strip()).id]
+
+
 def assert_model_ready(model_id: str, *, root: str | Path | None = None) -> Path:
     path = local_model_path(model_id, root=root)
     if not is_model_ready(model_id, root=root):
@@ -45,9 +52,10 @@ def download_model_weights(
             "status": "cached",
             "path": str(dest),
         }
-    from huggingface_hub import snapshot_download
+    from modal_sana.modal.fast_download import download_hf_repo
+    from modal_sana.modal.secrets import hf_token
 
-    snapshot_download(repo_id=spec.hf_id, local_dir=str(dest), token=token)
+    method = download_hf_repo(spec.hf_id, dest, token=token or hf_token())
     if not is_model_ready(model_id, root=root):
         raise RuntimeError(
             f"Downloaded {spec.hf_id} to {dest} but model_index.json is missing"
@@ -57,6 +65,7 @@ def download_model_weights(
         "hf_id": spec.hf_id,
         "status": "downloaded",
         "path": str(dest),
+        "method": method,
     }
 
 

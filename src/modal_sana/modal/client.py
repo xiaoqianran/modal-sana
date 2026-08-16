@@ -37,10 +37,9 @@ class ModalSanaGenerator:
         if not payloads:
             return
 
-        secrets = []
-        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-        if token:
-            secrets.append(modal.Secret.from_dict({"HF_TOKEN": token, "HUGGING_FACE_HUB_TOKEN": token}))
+        from modal_sana.modal.secrets import modal_download_secrets
+
+        secrets = modal_download_secrets()
 
         options: dict[str, Any] = {
             "gpu": spec.modal_name,

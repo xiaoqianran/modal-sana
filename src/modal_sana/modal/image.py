@@ -10,10 +10,11 @@ _CACHE_ENV = {
     "TRANSFORMERS_CACHE": CACHE_DIR,
 }
 
-# CPU prefetch image: huggingface_hub only. No torch, no GPU.
+# CPU prefetch image: aria2c + hf CLI. No torch, no GPU.
 download_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .uv_pip_install("huggingface-hub>=0.30.0")
+    .apt_install("aria2", "ca-certificates")
+    .uv_pip_install("huggingface-hub>=0.30.0", "hf_xet")
     .env(_CACHE_ENV)
     .add_local_python_source("modal_sana")
 )

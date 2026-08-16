@@ -23,7 +23,7 @@ Local CLI/Web own jobs, prompts, SQLite metadata, and the gallery. Modal owns GP
 
 - Fan-out: `SanaWorker.generate_batch.map(..., order_outputs=False, return_exceptions=True)`
 - GPU / concurrency: `with_options(gpu=..., max_containers=...)`
-- Warm weights: CPU `prefetch_model` writes `/cache/models/{id}` on Volume and `commit()`s; GPU `@enter` only `from_pretrained(..., local_files_only=True)`
+- Warm weights: CPU `prefetch_model` writes `/cache/models/{id}` on Volume and `commit()`s; GPU `@enter` only `from_pretrained(..., local_files_only=True)`. `modal-sana prefetch` with no args downloads every model (aria2c / `hf` CLI / snapshot). Tokens: `HF_TOKEN`, `CIVITAI_TOKEN`, `GITHUB_TOKEN`.
 - Deploy: `uv run modal deploy -m modal_sana.modal.worker` (registers prefetch + SanaWorker)
 
 `SanaWorker` must **not** use `from __future__ import annotations` — `modal.parameter()` needs real types.

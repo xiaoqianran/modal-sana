@@ -10,6 +10,7 @@ from modal_sana.modal.weights import (
     is_model_ready,
     list_ready_models,
     local_model_path,
+    models_to_prefetch,
 )
 from modal_sana.models.sana.registry import list_models
 
@@ -41,22 +42,27 @@ def test_download_skips_when_cached(tmp_path: Path) -> None:
 
 
 def test_download_writes_snapshot(tmp_path: Path, monkeypatch) -> None:
-    import sys
-    import types
-
     root = tmp_path / "models"
 
-    def fake_snapshot(*, repo_id: str, local_dir: str, token=None):
-        dest = Path(local_dir)
+    def fake_fetch(repo_id: str, dest, token=None):
+        dest = Path(dest)
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "model_index.json").write_text(repo_id, encoding="utf-8")
+        return "aria2c"
 
-    fake_hub = types.ModuleType("huggingface_hub")
-    fake_hub.snapshot_download = fake_snapshot
-    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+    monkeypatch.setattr("modal_sana.modal.fast_download.download_hf_repo", fake_fetch)
     result = download_model_weights("sana-sprint-1.6b", root=root)
     assert result["status"] == "downloaded"
+    assert result["method"] == "aria2c"
     assert is_model_ready("sana-sprint-1.6b", root=root)
+
+
+def test_prefetch_default_is_all_models() -> None:
+    ids = models_to_prefetch(None)
+    assert ids == [spec.id for spec in list_models()]
+    assert len(ids) >= 5
+    assert models_to_prefetch(None, all_models=True) == ids
+    assert models_to_prefetch("sana-sprint-0.6b") == ["sana-sprint-0.6b"]
 
 
 def test_list_ready_models(tmp_path: Path) -> None:
