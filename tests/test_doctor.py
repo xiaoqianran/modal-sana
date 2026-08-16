@@ -22,10 +22,15 @@ def test_proxy_env_reports_https(monkeypatch) -> None:
     assert "pw" not in detail
 
 
-def test_doctor_includes_proxy_extra() -> None:
+def test_doctor_includes_proxy_extra(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_app_available",
+        lambda app_name=None: (True, None),
+    )
     report = run_doctor()
     names = {check.name for check in report.checks}
     assert "api-proxy-support" in names
     assert "Modal API proxy" in names
+    assert "Deployed app" in names
     extra_ok, extra_detail = _proxy_extra()
     assert extra_ok, extra_detail

@@ -41,7 +41,7 @@ class ImageGenerator(Protocol):
         workers: int,
         model: str,
         retry: int = 2,
-        deployed: bool = False,
+        deployed: bool | None = None,
     ) -> Iterator[GenerateResult]:
         """Yield one result per generation, as soon as a GPU batch finishes."""
 
@@ -51,5 +51,5 @@ class GeneratorOptions(BaseModel):
     workers: int = 2
     model: str = "sana-sprint-1.6b"
     retry: int = 2
-    deployed: bool = False
+    deployed: bool | None = None
     extra: dict = Field(default_factory=dict)

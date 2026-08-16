@@ -71,6 +71,7 @@ def test_job_forwards_gpu_model_and_image_params(service: JobService) -> None:
     assert final.status == "completed"
     assert recorder.seen["gpu"] == "H100"
     assert recorder.seen["model"] == "sana-1.5-4.8b"
+    assert recorder.seen["deployed"] is None
     request = recorder.requests[0]
     assert request.model == "sana-1.5-4.8b"
     assert request.requested_gpu == "H100"

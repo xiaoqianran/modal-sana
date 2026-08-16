@@ -70,11 +70,12 @@ class ModalSanaGenerator:
         workers: int,
         model: str,
         retry: int = 2,
-        deployed: bool = False,
+        deployed: bool | None = None,
     ) -> Iterator[GenerateResult]:
         import modal
 
         from modal_sana.modal.app import app
+        from modal_sana.modal.deploy_mode import resolve_deploy_mode
         from modal_sana.modal.gpu import get_gpu
         from modal_sana.modal.secrets import modal_download_secrets
 
@@ -85,7 +86,8 @@ class ModalSanaGenerator:
             return
 
         secrets = modal_download_secrets()
-        use_deployed = deployed or os.environ.get("MODAL_SANA_DEPLOYED") == "1"
+        decision = resolve_deploy_mode(deployed)
+        use_deployed = decision.use_deployed
         started = time.perf_counter()
         self.last_meta.update(
             {
@@ -93,6 +95,7 @@ class ModalSanaGenerator:
                 "modal_gpu": spec.modal_name,
                 "model": model,
                 "prefetch_by_model": {},
+                **decision.as_meta(),
             }
         )
         if use_deployed:
@@ -245,6 +248,9 @@ def _iter_results(
             runtime = item.get("runtime") or batch_ids["runtime"] or {}
             telemetry = {
                 **batch_ids,
+                "deploy_mode": meta.get("deploy_mode"),
+                "deployed": meta.get("deployed"),
+                "deploy_reason": meta.get("deploy_reason"),
                 "load_ms": item.get("load_ms"),
                 "infer_ms": item.get("infer_ms"),
                 "encode_ms": item.get("encode_ms"),

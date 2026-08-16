@@ -114,16 +114,32 @@ uv run modal-sana gpus
 uv run modal-sana benchmark --gpu L40S,RTX-PRO-6000 --count 8
 ```
 
-部署成常驻 App（可选，热容器更稳）：
+本地 Web / CLI **不是** `modal serve`。点 Generate 也不会自动 `modal deploy`。
+
+三种跑 GPU 的方式：
+
+| 方式 | 谁启动 | 快照 |
+| --- | --- | --- |
+| **deployed**（默认，如果已经 deploy 过） | 你先 `modal deploy`，本地只 `from_name` 调用 | 有 |
+| **ephemeral** `app.run()` | 每次 Generate 起一个一次性 App | 无，会看到 *Memory snapshots are disabled for ephemeral apps* |
+| `modal serve` | 本仓库不用 | — |
 
 ```bash
+# 做一次（改 worker 代码后要重新 deploy，快照才生效）
 uv run modal deploy -m modal_sana.modal.worker
-MODAL_SANA_DEPLOYED=1 uv run modal-sana generate "a white cat"
+
+# 之后 Generate / prefetch 会自动走 deployed
+uv run modal-sana generate "a white cat"
+uv run modal-sana web
+
+# 强制一次性 ephemeral（不要快照时）
+uv run modal-sana generate "a white cat" --ephemeral
+MODAL_SANA_EPHEMERAL=1 uv run modal-sana web
 ```
 
 ## Web
 
-`uv run modal-sana web` 打开 `http://127.0.0.1:7860`。
+`uv run modal-sana web` 打开 `http://127.0.0.1:7860`。这是本地 FastAPI，不是 Modal 的 `serve`。GPU 默认打已 deploy 的 `modal-sana` App。
 
 - **Generate** 单 Prompt
 - **Batch** 拖文件或粘贴多行

@@ -47,7 +47,7 @@ def batch(
     quality: OptQuality = 90,
     negative: OptNegative = "",
     dry_run: OptDryRun = False,
-    deployed: OptDeployed = False,
+    deployed: OptDeployed = None,
     deduplicate: OptDedup = False,
 ) -> None:
     """Parse a prompt file and run it as one Job."""

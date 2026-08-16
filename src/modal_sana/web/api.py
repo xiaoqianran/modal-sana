@@ -18,6 +18,7 @@ from modal_sana.core.predict import predict_run
 from modal_sana.core.prompts import parse_prompt_file, parse_prompt_text
 from modal_sana.modal.billing import workspace_balance
 from modal_sana.modal.client import ensure_local_app_objects
+from modal_sana.modal.deploy_mode import inspect_deploy_target
 from modal_sana.modal.gpu import list_gpus
 from modal_sana.modal.ledger import load_dict_events, safe_query_shared_ledger
 from modal_sana.models.sana.registry import get_model, list_models
@@ -62,7 +63,7 @@ class CreateJobBody(BaseModel):
     quality: int = 90
     negative_prompt: str = ""
     dry_run: bool = False
-    deployed: bool = False
+    deployed: bool | None = None
     deduplicate: bool = False
 
 
@@ -133,7 +134,9 @@ def meta() -> dict[str, Any]:
             "port": _settings.port,
             "data_dir": str(_settings.data_dir),
             "monthly_credits_usd": _settings.monthly_credits_usd,
+            "prefer_deployed": True,
         },
+        "runtime": inspect_deploy_target(),
     }
 
 
@@ -244,6 +247,7 @@ async def create_job_from_file(
     batch_size: int = 4,
     workers: int = 2,
     dry_run: bool = False,
+    deployed: bool | None = None,
     image_format: str = "webp",
 ) -> dict[str, Any]:
     name = Path(file.filename or "prompts.txt").name
@@ -268,6 +272,7 @@ async def create_job_from_file(
         batch_size=batch_size,
         workers=workers,
         dry_run=dry_run,
+        deployed=deployed,
         image_format=fmt,  # type: ignore[arg-type]
     )
     try:

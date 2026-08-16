@@ -52,7 +52,7 @@ def benchmark(
             quality=90,
             negative="",
             dry_run=dry_run,
-            deployed=False,
+            deployed=None,
             deduplicate=False,
         )
         job = svc.create_job([PromptSpec(prompt=prompt, count=count, seed=0)], config)

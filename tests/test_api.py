@@ -16,6 +16,7 @@ def test_create_job_and_gallery(tmp_path, monkeypatch) -> None:
         json={"prompt": "a bicycle in the rain", "count": 2, "seed": 3, "dry_run": True},
     )
     assert created.status_code == 200, created.text
+    assert created.json()["config"]["deployed"] is None
     job_id = created.json()["id"]
     # The API starts a background thread; wait for completion.
     for _ in range(50):
@@ -44,13 +45,30 @@ def test_create_job_and_gallery(tmp_path, monkeypatch) -> None:
     assert "modal.generate" in names
 
 
-def test_meta_and_health() -> None:
+def test_meta_and_health(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "modal_sana.web.api.inspect_deploy_target",
+        lambda: {
+            "app_name": "modal-sana",
+            "available": True,
+            "error": None,
+            "preference": "auto",
+            "would_use": "deployed",
+            "snapshots": True,
+            "note": "found deployed app",
+            "deploy_command": "uv run modal deploy -m modal_sana.modal.worker",
+            "not_modal_serve": True,
+        },
+    )
     client = TestClient(app)
     assert client.get("/api/health").json()["status"] == "ok"
     meta = client.get("/api/meta").json()
     assert any(model["id"] == "sana-sprint-1.6b" for model in meta["models"])
     assert any(gpu["id"] == "L40S" for gpu in meta["gpus"])
     assert any(gpu["id"] == "H100" and gpu["usd_per_second"] > 0 for gpu in meta["gpus"])
+    assert meta["runtime"]["would_use"] == "deployed"
+    assert meta["runtime"]["not_modal_serve"] is True
+    assert meta["defaults"]["prefer_deployed"] is True
 
 
 def test_forecast_endpoint(tmp_path, monkeypatch) -> None:
