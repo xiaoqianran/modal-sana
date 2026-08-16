@@ -16,7 +16,7 @@ def web(
     port: Annotated[int | None, typer.Option("--port")] = None,
     open_browser: Annotated[bool, typer.Option("--open/--no-open")] = True,
 ) -> None:
-    """Start the local workbench on http://127.0.0.1:7860."""
+    """Start the local workbench on http://127.0.0.1:7862."""
     cfg = settings()
     bind_host = host or cfg.host
     bind_port = port or cfg.port
