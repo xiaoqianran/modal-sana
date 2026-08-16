@@ -40,6 +40,7 @@ def cost(
     svc = service()
     if job_id is None:
         _print_rate_table()
+        _print_workspace_ledger()
         jobs = svc.list_jobs(limit=1)
         if not jobs:
             return
@@ -78,6 +79,36 @@ def cost(
         )
     console.print(table)
     console.print(f"\n[dim]{report['notes']}[/dim]")
+
+
+def _print_workspace_ledger() -> None:
+    try:
+        from modal_sana.modal.billing import workspace_balance
+        from modal_sana.modal.ledger import safe_query_shared_ledger
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[dim]shared ledger unavailable: {exc}[/dim]")
+        return
+    balance = workspace_balance()
+    if balance.get("ok"):
+        console.print(
+            f"\nworkspace {balance.get('workspace') or ''}  ·  "
+            f"this month {format_usd(balance.get('metered_usd'))} metered  ·  "
+            f"remaining est. {format_usd(balance.get('remaining_usd'))}"
+        )
+    else:
+        console.print(f"\n[dim]Modal balance: {balance.get('error') or 'unavailable'}[/dim]")
+    ledger = safe_query_shared_ledger(period="day", page=1, per_page=8)
+    snaps = ledger.get("snapshots") or {}
+    if snaps:
+        console.print(
+            "shared ledger  "
+            + "  ".join(
+                f"{grain} {format_usd((snaps.get(grain) or {}).get('total_cost_usd'))}"
+                for grain in ("hour", "day", "week", "month")
+            )
+        )
+    if ledger.get("error"):
+        console.print(f"[dim]{ledger['error']}[/dim]")
 
 
 def _print_rate_table() -> None:

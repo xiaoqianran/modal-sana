@@ -58,11 +58,25 @@ function select(name, label, options, value) {
   return `<div><label>${label}</label><select name="${name}">${opts}</select></div>`;
 }
 
+function gpuChoices(meta) {
+  return (meta.gpus || []).map((gpu) => ({
+    id: gpu.id,
+    name: `${gpu.id} · $${Number(gpu.usd_per_hour).toFixed(2)}/hr · ${gpu.vram_gb}GB`,
+  }));
+}
+
+function modelChoices(meta) {
+  return (meta.models || []).map((model) => ({
+    id: model.id,
+    name: model.name || model.id,
+  }));
+}
+
 function settingsGrid(d, meta) {
   return `
     <div class="grid">
-      ${select("model", "Model", meta.models, d.model)}
-      ${select("gpu", "GPU", meta.gpus, d.gpu)}
+      ${select("model", "Model（只换权重，不换卡）", modelChoices(meta), d.model)}
+      ${select("gpu", "GPU（必须单独选；默认 L40S）", gpuChoices(meta), d.gpu)}
       ${field("count", "Count", d.count, "number")}
       ${field("width", "Width", d.width, "number")}
       ${field("height", "Height", d.height, "number")}
@@ -121,7 +135,8 @@ async function jobDetailPage(jobId) {
     <div class="panel">
       <div class="check"><span>ID</span><span class="mono">${job.id}</span></div>
       <div class="check"><span>Status</span><span class="pill ${job.status}">${job.status}</span></div>
-      <div class="check"><span>GPU / model</span><span>${job.gpu} · ${job.model}</span></div>
+      <div class="check"><span>Requested GPU / model</span><span>${job.gpu} · ${job.model}</span></div>
+      <div class="check"><span>Actual GPU</span><span>${(detail.generations || []).find((item) => item.actual_gpu)?.actual_gpu || "—"} ${(detail.generations || []).find((item) => item.actual_device)?.actual_device || ""}</span></div>
       <div class="check"><span>Images</span><span>${job.completed_images}/${job.total_images}</span></div>
       <div class="check"><span>GPU seconds</span><span class="mono">${(job.gpu_seconds || 0).toFixed(4)}</span></div>
       <div class="check"><span>Estimated cost</span><span class="mono">${formatUsd(job.cost_usd)}</span></div>
@@ -185,6 +200,19 @@ function setProgress(completed, total, extra = "") {
   bar.style.width = total ? `${Math.min(100, (completed / total) * 100)}%` : "0%";
 }
 
+function showApplied(payload) {
+  const root = document.getElementById("applied-banner");
+  if (!root) return;
+  const requested = payload.requested_gpu;
+  const actual = payload.actual_gpu;
+  const device = payload.actual_device;
+  const model = payload.loaded_model || payload.requested_model;
+  if (!requested && !actual && !model) return;
+  const match = payload.gpu_match;
+  const cls = match === false ? "bad" : "ok";
+  root.innerHTML = `<div class="apply-line ${cls}">container GPU=${actual || "?"} (${device || "no cuda name"}) · requested ${requested || "?"} · model ${model || "?"} · match=${match == null ? "?" : match}</div>`;
+}
+
 function listenJob(jobId) {
   if (state.source) state.source.close();
   state.source = new EventSource(`/api/jobs/${jobId}/events`);
@@ -196,6 +224,7 @@ function listenJob(jobId) {
     }
     if (event.type === "image.completed" || event.type === "image.failed") {
       setProgress(progress.completed || 0, progress.total || 0, event.type === "image.failed" ? "failed" : "");
+      showApplied(event.payload || {});
     }
     if (["job.completed", "job.failed", "job.cancelled"].includes(event.type)) {
       setProgress(event.payload.completed_images || 0, event.payload.total_images || 0, event.payload.status);
@@ -209,21 +238,79 @@ function generatePage(meta) {
   const d = defaultsFrom(meta);
   main.innerHTML = `
     <h1>Generate</h1>
-    <p class="lede">One prompt. Modal keeps the GPU warm. Images land in the local gallery as they finish.</p>
+    <p class="lede">One prompt. Model and GPU are independent — switching the model does not switch the card. The forecast below is Modal list price before you spend.</p>
     <form class="panel" id="gen-form">
       <label>Prompt</label>
       <textarea name="prompt" placeholder="a futuristic Tokyo street at night" required></textarea>
       ${settingsGrid(d, meta)}
+      <p class="apply-line mono" id="will-apply">will request …</p>
+      <div class="forecast" id="forecast">
+        <div class="forecast-card"><h3>纯 GPU 加载</h3><div class="mono" id="fc-load">…</div></div>
+        <div class="forecast-card"><h3>GPU 实际生成</h3><div class="mono" id="fc-gen">…</div></div>
+        <div class="forecast-card"><h3>Modal 还剩多少钱</h3><div class="mono" id="fc-bal">…</div></div>
+      </div>
+      <p class="lede" id="fc-note"></p>
       <div class="actions">
         <button type="submit">Generate</button>
         <span class="mono" id="job-id"></span>
       </div>
+      <div id="applied-banner"></div>
       ${progressBox()}
     </form>
+    <h2 class="section">Shared Modal cost ledger</h2>
+    <p class="lede">Every device that runs this app against the same Modal workspace writes here. Periods are UTC.</p>
+    <div class="panel" id="ledger-panel">
+      <div class="snapshots" id="ledger-snaps"></div>
+      <div class="toolbar">
+        <select id="ledger-period">
+          ${["hour", "day", "week", "month", "all"].map((item) => `<option value="${item}" ${item === "day" ? "selected" : ""}>${item}</option>`).join("")}
+        </select>
+        <button type="button" class="ghost" id="ledger-refresh">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>PERIOD</th><th>LOAD $</th><th>GENERATE $</th><th>TOTAL</th><th>EVENTS</th></tr></thead>
+        <tbody id="ledger-periods"><tr><td colspan="5">loading…</td></tr></tbody>
+      </table>
+      <h3 class="section">Events</h3>
+      <table>
+        <thead><tr><th>TIME</th><th>KIND</th><th>MODEL</th><th>GPU</th><th>SEC</th><th>$</th></tr></thead>
+        <tbody id="ledger-events"><tr><td colspan="6">loading…</td></tr></tbody>
+      </table>
+      <div class="pager">
+        <button type="button" class="ghost" id="ledger-prev">Prev</button>
+        <span id="ledger-page">page 1</span>
+        <button type="button" class="ghost" id="ledger-next">Next</button>
+      </div>
+    </div>
   `;
-  document.getElementById("gen-form").onsubmit = async (event) => {
+  const form = document.getElementById("gen-form");
+  state.ledgerPage = 1;
+  const refresh = () => refreshForecast(form, state.ledgerPage);
+  form.addEventListener("input", () => {
+    updateWillApply(form, meta);
+    clearTimeout(state.forecastTimer);
+    state.forecastTimer = setTimeout(refresh, 280);
+  });
+  form.addEventListener("change", () => {
+    updateWillApply(form, meta);
+    refresh();
+  });
+  document.getElementById("ledger-period").onchange = () => {
+    state.ledgerPage = 1;
+    refresh();
+  };
+  document.getElementById("ledger-refresh").onclick = refresh;
+  document.getElementById("ledger-prev").onclick = () => {
+    state.ledgerPage = Math.max(1, (state.ledgerPage || 1) - 1);
+    refresh();
+  };
+  document.getElementById("ledger-next").onclick = () => {
+    state.ledgerPage = (state.ledgerPage || 1) + 1;
+    refresh();
+  };
+  form.onsubmit = async (event) => {
     event.preventDefault();
-    const button = event.target.querySelector("button");
+    const button = event.target.querySelector("button[type=submit]");
     button.disabled = true;
     try {
       const payload = formPayload(event.target);
@@ -242,6 +329,123 @@ function generatePage(meta) {
       button.disabled = false;
     }
   };
+  updateWillApply(form, meta);
+  refresh();
+}
+
+function updateWillApply(form, meta) {
+  const payload = formPayload(form);
+  const model = (meta.models || []).find((item) => item.id === payload.model);
+  const gpu = (meta.gpus || []).find((item) => item.id === payload.gpu);
+  const steps = payload.steps || model?.default_steps || "?";
+  const line = document.getElementById("will-apply");
+  if (!line) return;
+  line.textContent = `will request GPU=${payload.gpu}  model=${payload.model}  ${payload.width}×${payload.height}  steps=${steps}  count=${payload.count}`;
+  if (gpu && model && gpu.vram_gb < (model.min_vram_gb || 0)) {
+    line.textContent += `  ·  WARN ${gpu.id} ${gpu.vram_gb}GB < model min ${model.min_vram_gb}GB`;
+    line.classList.add("bad");
+  } else {
+    line.classList.remove("bad");
+  }
+}
+
+async function refreshForecast(form, page = 1) {
+  const payload = formPayload(form);
+  const period = document.getElementById("ledger-period")?.value || "day";
+  const query = new URLSearchParams({
+    model: payload.model,
+    gpu: payload.gpu,
+    count: String(payload.count || 1),
+    width: String(payload.width || 1024),
+    height: String(payload.height || 1024),
+    batch_size: String(payload.batch_size || 4),
+    workers: String(payload.workers || 2),
+    period,
+    page: String(page || 1),
+    per_page: "15",
+  });
+  if (payload.steps != null) query.set("steps", String(payload.steps));
+  try {
+    const data = await api(`/api/cost/forecast?${query}`);
+    renderForecast(data);
+    renderLedger(data.ledger);
+  } catch (error) {
+    const load = document.getElementById("fc-load");
+    if (load) load.textContent = error.message;
+  }
+}
+
+function renderForecast(data) {
+  const predict = data.predict || {};
+  const balance = data.balance || {};
+  const load = predict.load || {};
+  const generate = predict.generate || {};
+  const set = (id, text) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = text;
+  };
+  set("fc-load", `${formatUsd(load.usd)}\n${(load.seconds || 0).toFixed(2)}s · ${load.containers || 1} container\n${load.source || ""}`);
+  set("fc-gen", `${formatUsd(generate.usd)}\n${(generate.seconds || 0).toFixed(2)}s · ${generate.count || 0} image\n${generate.source || ""}`);
+  if (balance.ok) {
+    const remain = balance.remaining_usd == null ? "—" : formatUsd(balance.remaining_usd);
+    set(
+      "fc-bal",
+      `${remain} left (est.)\nthis month metered ${formatUsd(balance.metered_usd)}\ncredits used ${formatUsd(balance.credits_applied_usd)} · billed ${formatUsd(balance.billed_usd)}`,
+    );
+  } else {
+    set("fc-bal", balance.error || "Modal billing unavailable");
+  }
+  const note = document.getElementById("fc-note");
+  if (note) {
+    note.textContent = [predict.independent, balance.notes].filter(Boolean).join(" ");
+  }
+}
+
+function renderLedger(ledger) {
+  if (!ledger) return;
+  const snaps = document.getElementById("ledger-snaps");
+  const snapshots = ledger.snapshots || {};
+  if (snaps) {
+    snaps.innerHTML = ["hour", "day", "week", "month"].map((grain) => {
+      const row = snapshots[grain] || {};
+      return `<div class="snap"><span>${grain}</span><strong>${formatUsd(row.total_cost_usd)}</strong><small>load ${formatUsd(row.load_cost_usd)} · gen ${formatUsd(row.generate_cost_usd)}</small></div>`;
+    }).join("");
+  }
+  const periods = document.getElementById("ledger-periods");
+  if (periods) {
+    const rows = ledger.periods || [];
+    periods.innerHTML = rows.length
+      ? rows.map((row) => `
+          <tr>
+            <td class="mono">${row.period}</td>
+            <td class="mono">${formatUsd(row.load_cost_usd)}</td>
+            <td class="mono">${formatUsd(row.generate_cost_usd)}</td>
+            <td class="mono">${formatUsd(row.total_cost_usd)}</td>
+            <td>${row.count}</td>
+          </tr>`).join("")
+      : `<tr><td colspan="5">${ledger.error || "No shared events yet. First real Modal generate writes the ledger."}</td></tr>`;
+  }
+  const events = document.getElementById("ledger-events");
+  if (events) {
+    const rows = ledger.items || [];
+    events.innerHTML = rows.length
+      ? rows.map((item) => `
+          <tr>
+            <td class="mono">${(item.ts || "").replace("T", " ").slice(0, 19)}</td>
+            <td>${item.kind}</td>
+            <td>${item.model || "—"}</td>
+            <td>${item.actual_gpu || item.requested_gpu || "—"}</td>
+            <td class="mono">${Number(item.gpu_seconds || 0).toFixed(3)}</td>
+            <td class="mono">${formatUsd(item.cost_usd)}</td>
+          </tr>`).join("")
+      : `<tr><td colspan="6">${ledger.error || "No events in this period."}</td></tr>`;
+  }
+  const page = document.getElementById("ledger-page");
+  if (page) page.textContent = `page ${ledger.page || 1} / ${ledger.pages || 1} · ${ledger.total || 0} events`;
+  const prev = document.getElementById("ledger-prev");
+  const next = document.getElementById("ledger-next");
+  if (prev) prev.disabled = (ledger.page || 1) <= 1;
+  if (next) next.disabled = (ledger.page || 1) >= (ledger.pages || 1);
 }
 
 function batchPage(meta) {
@@ -429,7 +633,8 @@ async function openLightbox(imageId) {
       <dl>
         <dt>Seed</dt><dd class="mono">${image.seed}</dd>
         <dt>Model</dt><dd>${image.model}</dd>
-        <dt>GPU</dt><dd>${image.gpu}</dd>
+        <dt>Requested GPU</dt><dd>${image.gpu}</dd>
+        <dt>Actual GPU</dt><dd>${image.actual_gpu || "—"} ${image.actual_device ? `(${image.actual_device})` : ""}</dd>
         <dt>Steps</dt><dd>${image.steps}</dd>
         <dt>Size</dt><dd>${image.width} × ${image.height}</dd>
         <dt>Time</dt><dd>${image.latency_ms ? (image.latency_ms / 1000).toFixed(2) + "s" : "—"}</dd>

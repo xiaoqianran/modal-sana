@@ -13,9 +13,13 @@ from modal_sana.core.config import load_settings
 from modal_sana.core.doctor import run_doctor
 from modal_sana.core.events import EventBus
 from modal_sana.core.jobs import JobService
+from modal_sana.core.ledger import PERIODS, Period
+from modal_sana.core.predict import predict_run
 from modal_sana.core.prompts import parse_prompt_file, parse_prompt_text
+from modal_sana.modal.billing import workspace_balance
 from modal_sana.modal.gpu import list_gpus
-from modal_sana.models.sana.registry import list_models
+from modal_sana.modal.ledger import load_dict_events, safe_query_shared_ledger
+from modal_sana.models.sana.registry import get_model, list_models
 from modal_sana.schemas.job import JobConfig, PromptSpec
 
 router = APIRouter(prefix="/api")
@@ -112,8 +116,10 @@ def meta() -> dict[str, Any]:
         "gpus": [
             {
                 "id": spec.id,
+                "name": spec.id,
                 "recommended_batch": spec.recommended_batch,
                 "usd_per_hour": spec.usd_per_hour,
+                "usd_per_second": spec.usd_per_second,
                 "vram_gb": spec.vram_gb,
                 "notes": spec.notes,
             }
@@ -124,8 +130,83 @@ def meta() -> dict[str, Any]:
             "gpu": _settings.default_gpu,
             "port": _settings.port,
             "data_dir": str(_settings.data_dir),
+            "monthly_credits_usd": _settings.monthly_credits_usd,
         },
     }
+
+
+@router.get("/cost/forecast")
+def cost_forecast(
+    model: str = "sana-sprint-1.6b",
+    gpu: str = "L40S",
+    count: int = Query(1, ge=1, le=10_000),
+    width: int = Query(1024, ge=256, le=4096),
+    height: int = Query(1024, ge=256, le=4096),
+    steps: int | None = Query(None, ge=1, le=200),
+    batch_size: int = Query(4, ge=1, le=64),
+    workers: int = Query(2, ge=1, le=32),
+    period: str = "day",
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
+) -> dict[str, Any]:
+    grain: Period = period if period in PERIODS else "day"  # type: ignore[assignment]
+    try:
+        get_model(model)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    history = []
+    history_error = None
+    try:
+        history = load_dict_events(refresh=False)
+    except Exception as exc:  # noqa: BLE001
+        history_error = f"{type(exc).__name__}: {exc}"
+    try:
+        predict = predict_run(
+            model=model,
+            gpu=gpu,
+            count=count,
+            width=width,
+            height=height,
+            steps=steps,
+            batch_size=batch_size,
+            workers=workers,
+            history=history,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    ledger = safe_query_shared_ledger(period=grain, page=page, per_page=per_page)
+    if history_error and not ledger.get("error"):
+        ledger["error"] = history_error
+    return {
+        "predict": predict,
+        "balance": workspace_balance(),
+        "ledger": ledger,
+    }
+
+
+@router.get("/cost/ledger")
+def cost_ledger(
+    period: str = "all",
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=200),
+    kind: str | None = None,
+    model: str | None = None,
+    gpu: str | None = None,
+) -> dict[str, Any]:
+    grain: Period = period if period in PERIODS else "all"  # type: ignore[assignment]
+    return safe_query_shared_ledger(
+        period=grain,
+        page=page,
+        per_page=per_page,
+        kind=kind,
+        model=model,
+        gpu=gpu,
+    )
+
+
+@router.get("/cost/balance")
+def cost_balance() -> dict[str, Any]:
+    return workspace_balance()
 
 
 @router.get("/doctor")

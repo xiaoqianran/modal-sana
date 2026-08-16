@@ -43,6 +43,44 @@ def test_deduplicate(service: JobService) -> None:
     assert job.total_images == 1
 
 
+class Recorder(MockGenerator):
+    def generate_batches(self, batches, **kwargs):
+        self.seen = kwargs
+        self.requests = [request for batch in batches for request in batch]
+        yield from super().generate_batches(batches, **kwargs)
+
+
+def test_job_forwards_gpu_model_and_image_params(service: JobService) -> None:
+    recorder = Recorder()
+    job = service.create_job(
+        [PromptSpec(prompt="param check", count=1, seed=9)],
+        JobConfig(
+            model="sana-1.5-4.8b",
+            gpu="H100",
+            width=512,
+            height=768,
+            steps=8,
+            guidance=3.5,
+            dry_run=True,
+            seed=9,
+            workers=1,
+            batch_size=1,
+        ),
+    )
+    final = service.run_job(job.id, generator=recorder)
+    assert final.status == "completed"
+    assert recorder.seen["gpu"] == "H100"
+    assert recorder.seen["model"] == "sana-1.5-4.8b"
+    request = recorder.requests[0]
+    assert request.model == "sana-1.5-4.8b"
+    assert request.requested_gpu == "H100"
+    assert request.width == 512
+    assert request.height == 768
+    assert request.steps == 8
+    assert request.guidance == 3.5
+    assert request.seed == 9
+
+
 def test_resume_failed(service: JobService) -> None:
     job = service.create_job(
         [PromptSpec(prompt="a forest", count=2, seed=1)],

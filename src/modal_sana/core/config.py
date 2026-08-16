@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     default_gpu: str = "L40S"
     deployed: bool = False
     app_name: str = "modal-sana"
+    monthly_credits_usd: float | None = 30.0
 
     @property
     def db_path(self) -> Path:

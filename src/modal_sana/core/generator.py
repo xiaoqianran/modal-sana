@@ -18,6 +18,8 @@ class GenerateRequest(BaseModel):
     model: str = "sana-sprint-1.6b"
     image_format: str = "webp"
     quality: int = 90
+    job_id: str = ""
+    requested_gpu: str = ""
 
 
 class GenerateResult(BaseModel):
