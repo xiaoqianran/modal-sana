@@ -159,6 +159,8 @@ def cost_forecast(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=200),
     include_ledger: bool = Query(True),
+    include_history: bool = Query(True),
+    include_balance: bool = Query(True),
 ) -> dict[str, Any]:
     grain: Period = period if period in PERIODS else "day"  # type: ignore[assignment]
     try:
@@ -167,10 +169,11 @@ def cost_forecast(
         raise HTTPException(400, str(exc)) from exc
     history = []
     history_error = None
-    try:
-        history = load_dict_events(refresh=False)
-    except Exception as exc:  # noqa: BLE001
-        history_error = f"{type(exc).__name__}: {exc}"
+    if include_history:
+        try:
+            history = load_dict_events(refresh=False)
+        except Exception as exc:  # noqa: BLE001
+            history_error = f"{type(exc).__name__}: {exc}"
     try:
         predict = predict_run(
             model=model,
@@ -192,7 +195,7 @@ def cost_forecast(
             ledger["error"] = history_error
     return {
         "predict": predict,
-        "balance": workspace_balance(),
+        "balance": workspace_balance() if include_balance else {"ok": False, "skipped": True},
         "ledger": ledger,
     }
 
@@ -225,11 +228,12 @@ def cost_balance() -> dict[str, Any]:
 
 
 @router.get("/doctor")
-def doctor() -> dict[str, Any]:
-    report = run_doctor()
+def doctor(quick: bool = False) -> dict[str, Any]:
+    report = run_doctor(remote=not quick)
     return {
         "ready": report.ready,
         "checks": [check.__dict__ for check in report.checks],
+        "quick": quick,
     }
 
 

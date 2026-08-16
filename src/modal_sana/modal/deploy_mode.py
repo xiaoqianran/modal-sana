@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -26,6 +27,9 @@ WORKER_CLASS = "SanaWorker"
 DEFAULT_APP_NAME = "modal-sana"
 
 _deploy_lock = threading.RLock()
+_LOOKUP_TTL_S = 30.0
+_lookup_lock = threading.Lock()
+_lookup_cache: dict[str, tuple[float, tuple[bool, str | None]]] = {}
 
 
 class DeployedAppMissing(RuntimeError):
@@ -40,16 +44,39 @@ def env_truthy(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def clear_deployed_app_cache(app_name: str | None = None) -> None:
+    with _lookup_lock:
+        if app_name:
+            _lookup_cache.pop(app_name, None)
+        else:
+            _lookup_cache.clear()
+
+
 def deployed_app_available(app_name: str | None = None) -> tuple[bool, str | None]:
     """True when ``SanaWorker`` exists on the named deployed app.
 
     Only ``NotFoundError`` means "not deployed". Any other exception is
     returned as an error string so the UI can show it.
+
+    Cached for 30s so ``/api/meta`` + ``/api/doctor`` + the web CLI do not
+    each pay a Modal hydrate round-trip on every click.
     """
+    name = app_name or deployed_app_name()
+    now = time.monotonic()
+    with _lookup_lock:
+        hit = _lookup_cache.get(name)
+        if hit and now - hit[0] < _LOOKUP_TTL_S:
+            return hit[1]
+    result = _probe_deployed_app(name)
+    with _lookup_lock:
+        _lookup_cache[name] = (time.monotonic(), result)
+    return result
+
+
+def _probe_deployed_app(name: str) -> tuple[bool, str | None]:
     import modal
     from modal.exception import NotFoundError
 
-    name = app_name or deployed_app_name()
     try:
         cls = modal.Cls.from_name(name, WORKER_CLASS)
         cls.hydrate()
@@ -145,6 +172,7 @@ def deploy_local_app(app_name: str | None = None) -> dict[str, Any]:
     print(f"modal-sana: deploying '{name}' (this is modal deploy, not app.run())", flush=True)
     with modal.enable_output():
         app.deploy(name=name)
+    clear_deployed_app_cache(name)
     return {"app_name": name, "app_id": getattr(app, "app_id", None)}
 
 

@@ -506,6 +506,8 @@ async function refreshForecast(form) {
     batch_size: String(payload.batch_size || 4),
     workers: String(payload.workers || 1),
     include_ledger: "false",
+    include_history: "false",
+    include_balance: "false",
   });
   if (payload.steps != null) query.set("steps", String(payload.steps));
   try {
@@ -534,6 +536,8 @@ function renderForecast(data) {
       "fc-bal",
       `${remain} 剩余\n本月 ${formatUsd(balance.metered_usd)}`,
     );
+  } else if (balance.skipped) {
+    set("fc-bal", "打开费用页查看");
   } else {
     set("fc-bal", balance.error || "Modal 账单暂不可用");
   }
@@ -1103,8 +1107,11 @@ lightbox.addEventListener("cancel", (event) => {
 });
 
 (async () => {
+  if (main && !main.innerHTML.trim()) {
+    main.innerHTML = `<h1>出图</h1><p class="lede">正在打开本地工作台…</p>`;
+  }
   try {
-    const [doctor, meta] = await Promise.all([api("/api/doctor"), api("/api/meta")]);
+    const [doctor, meta] = await Promise.all([api("/api/doctor?quick=1"), api("/api/meta")]);
     state.meta = meta;
     const ver = meta.version ? `v${meta.version} · ` : "";
     if (!doctor.ready) {
