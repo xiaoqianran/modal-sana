@@ -75,7 +75,7 @@ class ModalSanaGenerator:
         import modal
 
         from modal_sana.modal.app import app
-        from modal_sana.modal.deploy_mode import resolve_deploy_mode
+        from modal_sana.modal.deploy_mode import ensure_deployed_or_fallback
         from modal_sana.modal.gpu import get_gpu
         from modal_sana.modal.secrets import modal_download_secrets
 
@@ -86,7 +86,7 @@ class ModalSanaGenerator:
             return
 
         secrets = modal_download_secrets()
-        decision = resolve_deploy_mode(deployed)
+        decision = ensure_deployed_or_fallback(deployed)
         use_deployed = decision.use_deployed
         print(
             f"modal-sana: Modal path={decision.mode} ({decision.reason}) "

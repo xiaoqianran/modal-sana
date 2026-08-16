@@ -114,29 +114,20 @@ uv run modal-sana gpus
 uv run modal-sana benchmark --gpu L40S,RTX-PRO-6000 --count 8
 ```
 
-本地 Web / CLI **不是** `modal serve`。点 Generate 也不会自动 `modal deploy`。
-
-三种跑 GPU 的方式：
+本地 Web / CLI **不是** `modal serve`。查得到已 deploy 的 `SanaWorker` 就直接调用；**查不到就自己 `app.deploy()`**（和 `modal deploy -m modal_sana.modal.worker` 同一件事）。只有工作区 **deploy 名额满了、且没有 `modal-sana`** 才回退一次性 `app.run()`。
 
 | 方式 | 谁启动 | 快照 |
 | --- | --- | --- |
-| **deployed**（默认） | 你先 `modal deploy`，本地只 `from_name` 调用 | 有 |
-| **ephemeral** `app.run()` | 仅 `--ephemeral` / 取消勾选 | 无，会看到 *Memory snapshots are disabled for ephemeral apps* |
+| **deployed**（默认） | 已有则 `from_name`；没有则自动 deploy | 有 |
+| **ephemeral** `app.run()` | 仅名额满且没有本 App，或 `--ephemeral` | 无 |
 | `modal serve` | 本仓库不用 | — |
 
-查找失败时 **不会再默默回退 ephemeral**。没 deploy 过会直接报错，而不是再起一个 `ap-...` 一次性 App。
-
 ```bash
-# 做一次（改 worker 代码后要重新 deploy，快照才生效）
-uv run modal deploy -m modal_sana.modal.worker
-
-# 之后 Generate / prefetch 会自动走 deployed
-uv run modal-sana generate "a white cat"
+uv run modal-sana generate "a white cat"   # 没有 deployed app 时会自动 deploy
 uv run modal-sana web
 
-# 强制一次性 ephemeral（不要快照时）
+# 强制一次性 ephemeral
 uv run modal-sana generate "a white cat" --ephemeral
-MODAL_SANA_EPHEMERAL=1 uv run modal-sana web
 ```
 
 ## Web
