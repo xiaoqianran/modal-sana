@@ -18,6 +18,9 @@ from modal_sana.models.sana.registry import get_model
 MINUTES = 60
 # Modal allows 2s–20min. Idle GPU+CPU of this container are billed until then.
 SCALEDOWN_SECONDS = 10
+# CPU memory snapshots (deployed only). Not GPU VRAM snapshots — those do not
+# help when the bottleneck is reading weights off a Volume.
+MEMORY_SNAPSHOT = True
 
 
 def _dtype(name: str):
@@ -26,7 +29,8 @@ def _dtype(name: str):
     return torch.bfloat16 if name == "bfloat16" else torch.float16
 
 
-def _load_pipeline(model_id: str):
+def _load_pipeline_cpu(model_id: str):
+    """Load weights into CPU RAM. Must not touch CUDA (breaks CPU snapshots)."""
     import torch
 
     spec = get_model(model_id)
@@ -41,12 +45,23 @@ def _load_pipeline(model_id: str):
         pipeline_cls = SanaPipeline
     path = assert_model_ready(model_id)
     pipe = pipeline_cls.from_pretrained(str(path), torch_dtype=dtype, local_files_only=True)
-    pipe.to("cuda")
     if hasattr(pipe, "vae") and pipe.vae is not None:
         pipe.vae.to(dtype)
     if hasattr(pipe, "text_encoder") and pipe.text_encoder is not None:
         pipe.text_encoder.to(torch.bfloat16)
     return pipe
+
+
+def _move_pipeline_cuda(pipe):
+    pipe.to("cuda")
+    return pipe
+
+
+def detect_snapshot_restore(snap_mono: float | None, now_mono: float) -> bool:
+    """Restore starts a new monotonic clock; create-path time only moves forward."""
+    if snap_mono is None:
+        return True
+    return now_mono < snap_mono
 
 
 def _encode(image, image_format: str, quality: int) -> bytes:
@@ -62,6 +77,7 @@ def _encode(image, image_format: str, quality: int) -> bytes:
     scaledown_window=SCALEDOWN_SECONDS,
     volumes={CACHE_DIR: huggingface_cache_volume()},
     retries=modal.Retries(max_retries=2, backoff_coefficient=2.0),
+    enable_memory_snapshot=MEMORY_SNAPSHOT,
 )
 class SanaWorker:
     """One warm GPU container = one loaded SANA pipeline.
@@ -69,6 +85,12 @@ class SanaWorker:
     Weights must already be on the Volume (CPU ``prefetch_model``).
     This class only loads from ``/cache/models/{id}`` with
     ``local_files_only=True`` — it never downloads from Hugging Face.
+
+    Deployed apps take a CPU memory snapshot after ``load_cpu`` (import +
+    from_pretrained on CPU). Later cold starts restore that RAM and only run
+    ``load_gpu`` (``pipe.to("cuda")``). Snapshots are per model_id and GPU
+    type; they exist only after ``modal deploy``. Ephemeral ``app.run()``
+    still does both enters every time.
 
     GPU type and max_containers MUST be applied at the call site with
     `SanaWorker.with_options(gpu=..., max_containers=...)`. The ``gpu="L40S"``
@@ -79,17 +101,36 @@ class SanaWorker:
 
     model_id: str = modal.parameter(default="sana-sprint-1.6b")
 
-    @modal.enter()
-    def load_pipeline(self) -> None:
+    @modal.enter(snap=True)
+    def load_cpu(self) -> None:
         huggingface_cache_volume().reload()
         started = time.perf_counter()
-        self.pipe = _load_pipeline(self.model_id)
-        self._load_ms = (time.perf_counter() - started) * 1000
+        self.pipe = _load_pipeline_cpu(self.model_id)
+        self._cpu_load_ms = (time.perf_counter() - started) * 1000
+        self._snap_mono = time.monotonic()
+
+    @modal.enter(snap=False)
+    def load_gpu(self) -> None:
+        started = time.perf_counter()
+        self.pipe = _move_pipeline_cuda(self.pipe)
+        self._gpu_move_ms = (time.perf_counter() - started) * 1000
+        self._from_snapshot = detect_snapshot_restore(
+            getattr(self, "_snap_mono", None),
+            time.monotonic(),
+        )
+        cpu_ms = float(getattr(self, "_cpu_load_ms", 0.0) or 0.0)
+        if self._from_snapshot:
+            self._load_ms = self._gpu_move_ms
+        else:
+            self._load_ms = cpu_ms + self._gpu_move_ms
         self._calls = 0
         self._runtime = probe_runtime(
             requested_model=self.model_id,
             loaded_model=self.model_id,
         )
+        self._runtime["from_snapshot"] = self._from_snapshot
+        self._runtime["cpu_load_ms"] = cpu_ms
+        self._runtime["gpu_move_ms"] = self._gpu_move_ms
 
     @modal.method()
     def generate_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -273,6 +314,9 @@ def _stamp_applied(
             "steps": item.get("steps"),
             "guidance": item.get("guidance"),
             "seed": item.get("seed"),
+            "from_snapshot": runtime.get("from_snapshot"),
+            "cpu_load_ms": runtime.get("cpu_load_ms"),
+            "gpu_move_ms": runtime.get("gpu_move_ms"),
         }
 
 
@@ -314,6 +358,7 @@ def _publish_cost_events(
                 "modal_function_call_id": ids.get("modal_function_call_id"),
                 "modal_input_id": ids.get("modal_input_id"),
                 "modal_task_id": runtime.get("modal_task_id"),
+                "from_snapshot": runtime.get("from_snapshot"),
                 "source": "modal-worker",
             }
         )

@@ -210,7 +210,8 @@ function showApplied(payload) {
   if (!requested && !actual && !model) return;
   const match = payload.gpu_match;
   const cls = match === false ? "bad" : "ok";
-  root.innerHTML = `<div class="apply-line ${cls}">container GPU=${actual || "?"} (${device || "no cuda name"}) · requested ${requested || "?"} · model ${model || "?"} · match=${match == null ? "?" : match}</div>`;
+  const snap = payload.from_snapshot;
+  root.innerHTML = `<div class="apply-line ${cls}">container GPU=${actual || "?"} (${device || "no cuda name"}) · requested ${requested || "?"} · model ${model || "?"} · match=${match == null ? "?" : match} · snapshot=${snap == null ? "?" : snap}</div>`;
 }
 
 function listenJob(jobId) {

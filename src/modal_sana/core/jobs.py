@@ -747,6 +747,9 @@ def _runtime_fields(tel: dict[str, Any] | None) -> dict[str, Any]:
         "loaded_model",
         "requested_model",
         "model_match",
+        "from_snapshot",
+        "cpu_load_ms",
+        "gpu_move_ms",
     ):
         value = data.get(key)
         if value is None:
