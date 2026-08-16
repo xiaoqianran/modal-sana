@@ -27,10 +27,25 @@ def test_doctor_includes_proxy_extra(monkeypatch) -> None:
         "modal_sana.modal.deploy_mode.deployed_app_available",
         lambda app_name=None: (True, None),
     )
-    report = run_doctor()
+    report = run_doctor(remote=False)
     names = {check.name for check in report.checks}
     assert "api-proxy-support" in names
     assert "Modal API proxy" in names
-    assert "Deployed app" in names
+    assert "Deployed app" not in names
     extra_ok, extra_detail = _proxy_extra()
     assert extra_ok, extra_detail
+
+
+def test_doctor_remote_includes_deployed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_app_available",
+        lambda app_name=None: (True, None),
+    )
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *args, **kwargs: type("C", (), {"close": lambda self: None})(),
+    )
+    report = run_doctor(remote=True)
+    names = {check.name for check in report.checks}
+    assert "Deployed app" in names
+    assert "network" in names

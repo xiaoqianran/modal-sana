@@ -122,3 +122,32 @@ def test_forecast_endpoint(tmp_path, monkeypatch) -> None:
     assert body["balance"]["remaining_usd"] == 27.36
     bad = client.get("/api/cost/forecast", params={"gpu": "not-a-gpu"})
     assert bad.status_code == 400
+
+
+def test_forecast_can_skip_remote_modal(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MODAL_SANA_DATA_DIR", str(tmp_path / "data"))
+    api.configure(Settings(data_dir=tmp_path / "data"))
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("generate forecast must not hit Modal")
+
+    monkeypatch.setattr("modal_sana.web.api.load_dict_events", boom)
+    monkeypatch.setattr("modal_sana.web.api.safe_query_shared_ledger", boom)
+    monkeypatch.setattr("modal_sana.web.api.workspace_balance", boom)
+    client = TestClient(app)
+    response = client.get(
+        "/api/cost/forecast",
+        params={
+            "model": "sana-sprint-1.6b",
+            "gpu": "L40S",
+            "count": 1,
+            "include_ledger": "false",
+            "include_history": "false",
+            "include_balance": "false",
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["predict"]["gpu"] == "L40S"
+    assert body["balance"]["skipped"] is True
+    assert body["ledger"] is None

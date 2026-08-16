@@ -74,6 +74,9 @@ def test_cost_page_is_first_class() -> None:
     assert "function go" in js
     assert "function formatRate" in js
     assert "include_ledger: \"false\"" in js
+    assert "include_history: \"false\"" in js
+    assert "include_balance: \"false\"" in js
+    assert "/api/doctor?quick=1" in js
     assert "renderChain" in js
     assert 'go(`/cost' in js or 'go("/cost' in js
     assert "event-head" in js

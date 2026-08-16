@@ -7,6 +7,8 @@ from modal_sana.core.jobs import JobService
 from modal_sana.modal.deploy_mode import (
     DEPLOY_COMMAND,
     DeployedAppMissing,
+    clear_deployed_app_cache,
+    deployed_app_available,
     ensure_deployed_or_fallback,
     inspect_deploy_target,
     is_deploy_quota_exhausted,
@@ -218,6 +220,23 @@ def test_env_ephemeral_wins_over_default(monkeypatch) -> None:
     decision = resolve_deploy_mode(None)
     assert decision.use_deployed is False
     assert decision.reason == "env-ephemeral"
+
+
+def test_deployed_app_lookup_is_cached(monkeypatch) -> None:
+    hits = {"n": 0}
+
+    def probe(name: str):
+        hits["n"] += 1
+        return True, None
+
+    clear_deployed_app_cache()
+    monkeypatch.setattr("modal_sana.modal.deploy_mode._probe_deployed_app", probe)
+    assert deployed_app_available("modal-sana") == (True, None)
+    assert deployed_app_available("modal-sana") == (True, None)
+    assert hits["n"] == 1
+    clear_deployed_app_cache("modal-sana")
+    assert deployed_app_available("modal-sana") == (True, None)
+    assert hits["n"] == 2
 
 
 def test_inspect_says_auto_deploy_when_missing(monkeypatch) -> None:

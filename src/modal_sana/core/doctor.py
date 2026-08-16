@@ -28,7 +28,8 @@ class DoctorReport:
         self.checks.append(Check(name, ok, detail))
 
 
-def run_doctor() -> DoctorReport:
+def run_doctor(*, remote: bool = True) -> DoctorReport:
+    """Local checks always. Modal hydrate / modal.com probe only when ``remote``."""
     report = DoctorReport()
     version = sys.version.split()[0]
     report.add("Python", sys.version_info >= (3, 12), version)
@@ -59,30 +60,31 @@ def run_doctor() -> DoctorReport:
     proxy_ok, proxy_detail = _proxy_env()
     report.add("Modal API proxy", proxy_ok, proxy_detail)
 
-    try:
-        import urllib.request
+    if remote:
+        try:
+            import urllib.request
 
-        urllib.request.urlopen("https://modal.com", timeout=5).close()
-        report.add("network", True, "modal.com reachable")
-    except Exception as exc:  # noqa: BLE001
-        report.add("network", False, str(exc))
+            urllib.request.urlopen("https://modal.com", timeout=5).close()
+            report.add("network", True, "modal.com reachable")
+        except Exception as exc:  # noqa: BLE001
+            report.add("network", False, str(exc))
 
-    try:
-        from modal_sana.modal.deploy_mode import DEPLOY_COMMAND, deployed_app_available, deployed_app_name
+        try:
+            from modal_sana.modal.deploy_mode import DEPLOY_COMMAND, deployed_app_available, deployed_app_name
 
-        name = deployed_app_name()
-        found, detail = deployed_app_available(name)
-        if found:
-            report.add("Deployed app", True, f"{name} · SanaWorker (snapshots on)")
-        else:
-            report.add(
-                "Deployed app",
-                False,
-                f"{name} missing — first Generate will deploy it. {DEPLOY_COMMAND}"
-                + (f" ({detail})" if detail else ""),
-            )
-    except Exception as exc:  # noqa: BLE001
-        report.add("Deployed app", False, str(exc))
+            name = deployed_app_name()
+            found, detail = deployed_app_available(name)
+            if found:
+                report.add("Deployed app", True, f"{name} · SanaWorker (snapshots on)")
+            else:
+                report.add(
+                    "Deployed app",
+                    False,
+                    f"{name} missing — first Generate will deploy it. {DEPLOY_COMMAND}"
+                    + (f" ({detail})" if detail else ""),
+                )
+        except Exception as exc:  # noqa: BLE001
+            report.add("Deployed app", False, str(exc))
 
     return report
 
