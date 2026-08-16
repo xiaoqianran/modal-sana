@@ -17,7 +17,7 @@ CLI 和 Web 共用同一套 Core。第一版不包含桌面 EXE（以后用 Taur
 | 万级 Prompt 并发 | 本地 for-loop 或自写分布式队列 | `SanaWorker.generate_batch.map(..., order_outputs=False)` |
 | 换 GPU | 为每种卡写一个 Function | [`with_options(gpu=...)`](https://modal.com/docs/guide/dynamic-function-config) |
 | `--workers 4` | 自己管进程池 | `with_options(max_containers=4)` |
-| 模型常驻 | 每次请求 `from_pretrained` | `@app.cls` + `@modal.enter()`，权重在 Volume |
+| 模型常驻 | 每次请求 `from_pretrained` | `@app.cls` + `@modal.enter()`，权重在 Volume。空闲 **10s** 后 GPU 和容器 CPU 一起释放 |
 | 瞬时失败 | 只在本地重试 | Modal `retries=` + 本地 Job resume |
 | 图片 | 塞进 SQLite Blob | SQLite 只存 metadata，文件在 `data/outputs/` |
 
