@@ -1,38 +1,41 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>modal-sana</title>
+  <title>modal-sana · 远程暗房</title>
+  <meta name="description" content="本地工作台：写提示词，Modal GPU 出图。不是 modal serve。" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  <a class="skip" href="#main">跳到内容</a>
   <div class="app">
-    <aside class="rail">
-      <div class="brand">
-        <span class="mark"></span>
+    <aside class="rail" aria-label="侧栏">
+      <div class="sprocket" aria-hidden="true"></div>
+      <header class="brand">
+        <span class="mark" aria-hidden="true"></span>
         <div>
           <strong>modal-sana</strong>
-          <small>remote darkroom</small>
+          <p>远程暗房</p>
         </div>
-      </div>
-      <nav id="nav">
-        <a href="#/generate" data-page="generate">Generate</a>
-        <a href="#/batch" data-page="batch">Batch</a>
-        <a href="#/jobs" data-page="jobs">Jobs</a>
-        <a href="#/gallery" data-page="gallery">Gallery</a>
-        <a href="#/benchmark" data-page="benchmark">Benchmark</a>
-        <a href="#/settings" data-page="settings">Settings</a>
+      </header>
+      <nav aria-label="主导航" id="nav">
+        <a href="#/generate" data-page="generate">生成</a>
+        <a href="#/batch" data-page="batch">批量</a>
+        <a href="#/jobs" data-page="jobs">任务</a>
+        <a href="#/gallery" data-page="gallery">图库</a>
+        <a href="#/benchmark" data-page="benchmark">基准</a>
+        <a href="#/settings" data-page="settings">设置</a>
       </nav>
-      <div class="rail-foot" id="rail-status">checking modal…</div>
+      <p class="rail-foot" id="rail-status" role="status">正在检查 Modal…</p>
     </aside>
-    <main id="main"></main>
+    <main id="main" tabindex="-1"></main>
   </div>
-  <div id="lightbox" class="lightbox hidden"></div>
+  <dialog id="lightbox" class="lightbox" aria-labelledby="lightbox-title"></dialog>
   <script src="/static/app.js" type="module"></script>
 </body>
 </html>
