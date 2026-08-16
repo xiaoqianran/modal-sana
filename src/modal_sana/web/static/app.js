@@ -37,7 +37,7 @@ function defaultsFrom(meta) {
     seed: "",
     batch_size: 4,
     workers: 2,
-    format: meta?.defaults?.image_format || "jpg",
+    format: meta?.defaults?.image_format || "png",
     dry_run: false,
     prefer_deployed: meta?.defaults?.prefer_deployed !== false,
   };
@@ -86,7 +86,7 @@ function settingsGrid(d, meta) {
       ${field("seed", "Seed", d.seed)}
       ${field("batch_size", "GPU batch", d.batch_size, "number")}
       ${field("workers", "Workers", d.workers, "number")}
-      ${select("image_format", "Format", ["jpg", "png", "webp"], d.format)}
+      ${select("image_format", "Format", ["png", "jpg", "webp"], d.format)}
     </div>
     ${field("dry_run", "Dry run (no Modal / no GPU)", d.dry_run, "checkbox")}
     ${field("prefer_deployed", "Prefer deployed Modal app (memory snapshots)", d.prefer_deployed !== false, "checkbox")}
@@ -110,7 +110,7 @@ function formPayload(form) {
     seed: num("seed"),
     batch_size: Number(data.get("batch_size") || 4),
     workers: Number(data.get("workers") || 2),
-    image_format: data.get("image_format") || "jpg",
+    image_format: data.get("image_format") || "png",
     dry_run: data.get("dry_run") === "on",
     prefer_deployed: data.get("prefer_deployed") === "on",
   };

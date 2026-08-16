@@ -60,7 +60,7 @@ class CreateJobBody(BaseModel):
     batch_size: int = 4
     workers: int = 2
     retry: int = 3
-    image_format: Literal["webp", "png", "jpg"] = "jpg"
+    image_format: Literal["webp", "png", "jpg"] = "png"
     quality: int = 90
     negative_prompt: str = ""
     dry_run: bool = False
@@ -136,7 +136,7 @@ def meta() -> dict[str, Any]:
             "data_dir": str(_settings.data_dir),
             "monthly_credits_usd": _settings.monthly_credits_usd,
             "prefer_deployed": True,
-            "image_format": "jpg",
+            "image_format": "png",
         },
         "runtime": inspect_deploy_target(),
         "version": __version__,
@@ -251,7 +251,7 @@ async def create_job_from_file(
     workers: int = 2,
     dry_run: bool = False,
     deployed: bool | None = None,
-    image_format: str = "jpg",
+    image_format: str = "png",
 ) -> dict[str, Any]:
     name = Path(file.filename or "prompts.txt").name
     tmp = _settings.data_dir / f"upload-{name}"
@@ -262,7 +262,7 @@ async def create_job_from_file(
         raise HTTPException(400, str(exc)) from exc
     finally:
         tmp.unlink(missing_ok=True)
-    fmt = image_format if image_format in {"webp", "png", "jpg"} else "jpg"
+    fmt = image_format if image_format in {"webp", "png", "jpg"} else "png"
     config = JobConfig(
         model=model,
         gpu=gpu,

@@ -150,7 +150,7 @@ def test_job_default_is_auto(service: JobService) -> None:
         JobConfig(dry_run=True, seed=1),
     )
     assert job.config.deployed is None
-    assert job.config.image_format == "jpg"
+    assert job.config.image_format == "png"
 
 
 def test_settings_deployed_true_is_required(service: JobService) -> None:

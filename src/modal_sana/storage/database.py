@@ -91,7 +91,7 @@ class GenerationRow(SQLModel, table=True):
     guidance: float
     width: int
     height: int
-    image_format: str = "jpg"
+    image_format: str = "png"
     quality: int = 90
     status: str = Field(default="pending", index=True)
     attempt: int = 0

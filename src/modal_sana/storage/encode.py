@@ -5,7 +5,7 @@ import io
 from PIL import Image
 
 
-def encode_image(image: Image.Image, image_format: str = "jpg", quality: int = 90) -> bytes:
+def encode_image(image: Image.Image, image_format: str = "png", quality: int = 90) -> bytes:
     buffer = io.BytesIO()
     fmt = image_format.lower()
     if fmt == "webp":
