@@ -602,6 +602,7 @@ name = "modal-sana"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp-socks" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "modal", extra = ["api-proxy-support"] },
@@ -609,6 +610,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "python-socks" },
     { name = "rich" },
     { name = "sqlmodel" },
     { name = "typer" },
@@ -623,6 +625,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp-socks", specifier = ">=0.8" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "modal", extras = ["api-proxy-support"], specifier = ">=1.0.0" },
@@ -632,6 +635,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "python-socks", specifier = ">=2.5" },
     { name = "rich", specifier = ">=14.0.0" },
     { name = "sqlmodel", specifier = ">=0.0.24" },
     { name = "typer", specifier = ">=0.16.0" },

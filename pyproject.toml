@@ -22,6 +22,8 @@ dependencies = [
     "uvicorn[standard]>=0.35.0",
     "python-multipart>=0.0.20",
     "modal[api-proxy-support]>=1.0.0",
+    "python-socks>=2.5",
+    "aiohttp-socks>=0.8",
     "pillow>=11.0.0",
     "httpx>=0.28.0",
 ]
