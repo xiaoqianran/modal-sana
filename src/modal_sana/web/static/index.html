@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>modal-sana</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="rail">
+      <div class="brand">
+        <span class="mark"></span>
+        <div>
+          <strong>modal-sana</strong>
+          <small>remote darkroom</small>
+        </div>
+      </div>
+      <nav id="nav">
+        <a href="#/generate" data-page="generate">Generate</a>
+        <a href="#/batch" data-page="batch">Batch</a>
+        <a href="#/jobs" data-page="jobs">Jobs</a>
+        <a href="#/gallery" data-page="gallery">Gallery</a>
+        <a href="#/benchmark" data-page="benchmark">Benchmark</a>
+        <a href="#/settings" data-page="settings">Settings</a>
+      </nav>
+      <div class="rail-foot" id="rail-status">checking modal…</div>
+    </aside>
+    <main id="main"></main>
+  </div>
+  <div id="lightbox" class="lightbox hidden"></div>
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>

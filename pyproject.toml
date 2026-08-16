@@ -1,0 +1,64 @@
+[project]
+name = "modal-sana"
+version = "0.1.0"
+description = "Local prompt workbench that runs NVIDIA SANA on Modal GPUs."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [{ name = "modal-sana" }]
+keywords = ["sana", "modal", "text-to-image", "gpu", "batch"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+    "typer>=0.16.0",
+    "rich>=14.0.0",
+    "pydantic>=2.11.0",
+    "pydantic-settings>=2.10.0",
+    "sqlmodel>=0.0.24",
+    "fastapi>=0.116.0",
+    "uvicorn[standard]>=0.35.0",
+    "python-multipart>=0.0.20",
+    "modal>=1.0.0",
+    "pillow>=11.0.0",
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+]
+
+[project.scripts]
+modal-sana = "modal_sana.cli.app:main"
+
+[project.urls]
+Homepage = "https://github.com/xiaoqianran/modal-sana"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+modal_sana = ["web/static/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

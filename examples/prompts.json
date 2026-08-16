@@ -1,0 +1,5 @@
+[
+  {"prompt": "a beautiful forest at dawn, cinematic light through the trees"},
+  {"prompt": "a futuristic city in the rain, neon reflections on wet streets", "count": 4},
+  {"prompt": "a white cat sitting beside a window, soft morning light", "seed": 12345}
+]

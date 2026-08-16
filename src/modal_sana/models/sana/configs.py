@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+from modal_sana.models.base import ModelSpec
+
+SANA_MODELS: tuple[ModelSpec, ...] = (
+    ModelSpec(
+        id="sana-sprint-1.6b",
+        name="SANA-Sprint-1.6B",
+        family="sana-sprint",
+        hf_id="Efficient-Large-Model/Sana_Sprint_1.6B_1024px_diffusers",
+        pipeline="sana-sprint",
+        default_steps=2,
+        default_guidance=4.5,
+        recommended_dtype="bfloat16",
+        description="Default. 1-4 step distilled SANA, ~0.3s/image on a fast GPU.",
+    ),
+    ModelSpec(
+        id="sana-sprint-0.6b",
+        name="SANA-Sprint-0.6B",
+        family="sana-sprint",
+        hf_id="Efficient-Large-Model/Sana_Sprint_0.6B_1024px_diffusers",
+        pipeline="sana-sprint",
+        default_steps=2,
+        default_guidance=4.5,
+        recommended_dtype="bfloat16",
+        description="Smaller Sprint variant. Fastest and cheapest.",
+    ),
+    ModelSpec(
+        id="sana-1.6b",
+        name="SANA-1.6B",
+        family="sana",
+        hf_id="Efficient-Large-Model/Sana_1600M_1024px_diffusers",
+        pipeline="sana",
+        default_steps=20,
+        default_guidance=4.5,
+        recommended_dtype="bfloat16",
+        description="Original SANA 1.6B. Higher quality, more steps.",
+    ),
+    ModelSpec(
+        id="sana-1.5-1.6b",
+        name="SANA-1.5-1.6B",
+        family="sana-1.5",
+        hf_id="Efficient-Large-Model/SANA1.5_1.6B_1024px_diffusers",
+        pipeline="sana",
+        default_steps=20,
+        default_guidance=4.5,
+        recommended_dtype="bfloat16",
+        description="SANA 1.5 1.6B with improved alignment.",
+    ),
+    ModelSpec(
+        id="sana-1.5-4.8b",
+        name="SANA-1.5-4.8B",
+        family="sana-1.5",
+        hf_id="Efficient-Large-Model/SANA1.5_4.8B_1024px_diffusers",
+        pipeline="sana",
+        default_steps=20,
+        default_guidance=4.5,
+        recommended_dtype="bfloat16",
+        description="Largest SANA 1.5. Needs a bigger GPU (L40S / PRO 6000 / H100).",
+    ),
+)
