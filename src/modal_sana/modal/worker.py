@@ -154,6 +154,7 @@ class SanaWorker:
         self._runtime["from_snapshot"] = self._from_snapshot
         self._runtime["cpu_load_ms"] = cpu_ms
         self._runtime["gpu_move_ms"] = self._gpu_move_ms
+        self._runtime.update(_vram_stats())
 
     @modal.method()
     def generate_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -223,7 +224,7 @@ class SanaWorker:
                             "encode_ms": 0.0,
                             "gpu_seconds": gpu_seconds,
                             "cold_start": cold,
-                            "vram_allocated_mb": _vram_mb(),
+                            **_vram_stats(),
                         }
                     )
                 continue
@@ -255,7 +256,7 @@ class SanaWorker:
                         "encode_ms": encode_ms,
                         "gpu_seconds": gpu_seconds,
                         "cold_start": cold,
-                        "vram_allocated_mb": _vram_mb(),
+                        **_vram_stats(),
                     }
                 )
             torch.cuda.empty_cache()
@@ -382,6 +383,9 @@ def _publish_cost_events(
                 "modal_input_id": ids.get("modal_input_id"),
                 "modal_task_id": runtime.get("modal_task_id"),
                 "from_snapshot": runtime.get("from_snapshot"),
+                "vram_allocated_mb": runtime.get("vram_allocated_mb"),
+                "vram_reserved_mb": runtime.get("vram_reserved_mb"),
+                "vram_peak_mb": runtime.get("vram_peak_mb"),
                 "source": "modal-worker",
             }
         )
@@ -408,6 +412,8 @@ def _publish_cost_events(
                 "infer_ms": infer_ms,
                 "encode_ms": encode_ms,
                 "vram_allocated_mb": row.get("vram_allocated_mb"),
+                "vram_reserved_mb": row.get("vram_reserved_mb"),
+                "vram_peak_mb": row.get("vram_peak_mb"),
                 "width": row.get("width") or item.get("width"),
                 "height": row.get("height") or item.get("height"),
                 "steps": item.get("steps"),
@@ -462,15 +468,26 @@ def _call_ids() -> dict[str, Any]:
     }
 
 
-def _vram_mb() -> float | None:
+def _vram_stats() -> dict[str, float | None]:
+    """Current GPU memory. Allocated = live tensors; reserved ≈ nvidia-smi; peak = high water."""
+    empty = {"vram_allocated_mb": None, "vram_reserved_mb": None, "vram_peak_mb": None}
     try:
         import torch
 
-        if torch.cuda.is_available():
-            return torch.cuda.memory_allocated() / (1024 * 1024)
+        if not torch.cuda.is_available():
+            return empty
+        scale = 1024.0 * 1024.0
+        return {
+            "vram_allocated_mb": torch.cuda.memory_allocated() / scale,
+            "vram_reserved_mb": torch.cuda.memory_reserved() / scale,
+            "vram_peak_mb": torch.cuda.max_memory_allocated() / scale,
+        }
     except Exception:
-        return None
-    return None
+        return empty
+
+
+def _vram_mb() -> float | None:
+    return _vram_stats()["vram_allocated_mb"]
 
 
 # Register CPU prefetch + ledger on the same App so `modal deploy -m modal_sana.modal.worker` includes them.

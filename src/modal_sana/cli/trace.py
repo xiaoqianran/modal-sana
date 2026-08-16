@@ -63,6 +63,7 @@ def cost(
     table.add_column("LOAD")
     table.add_column("INFER")
     table.add_column("ENCODE")
+    table.add_column("VRAM")
     table.add_column("GPU-S")
     table.add_column("$")
     table.add_column("INPUT")
@@ -73,6 +74,7 @@ def cost(
             _ms(item.get("load_ms")),
             _ms(item.get("infer_ms")),
             _ms(item.get("encode_ms")),
+            _vram(item),
             f"{item.get('gpu_seconds') or 0:.4f}",
             format_usd(item.get("cost_usd")),
             item.get("modal_input_id") or "—",
@@ -131,3 +133,15 @@ def _ms(value: float | None) -> str:
     if value is None:
         return "—"
     return f"{value:.1f}ms"
+
+
+def _vram(item: dict) -> str:
+    reserved = item.get("vram_reserved_mb")
+    allocated = item.get("vram_allocated_mb")
+    peak = item.get("vram_peak_mb")
+    mb = reserved if reserved is not None else allocated if allocated is not None else peak
+    if mb is None:
+        return "—"
+    if mb >= 1024:
+        return f"{mb / 1024:.2f} GB"
+    return f"{mb:.0f} MB"

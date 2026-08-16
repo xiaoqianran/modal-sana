@@ -28,6 +28,9 @@ class ImageRecord(BaseModel):
     load_ms: float | None = None
     encode_ms: float | None = None
     gpu_seconds: float | None = None
+    vram_allocated_mb: float | None = None
+    vram_reserved_mb: float | None = None
+    vram_peak_mb: float | None = None
     modal_function_call_id: str | None = None
     modal_input_id: str | None = None
     created_at: datetime

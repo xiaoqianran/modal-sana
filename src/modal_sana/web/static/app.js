@@ -159,6 +159,20 @@ function formatMs(ms) {
   return `${(ms / 1000).toFixed(3)}s`;
 }
 
+function formatVram(item) {
+  const reserved = item?.vram_reserved_mb;
+  const allocated = item?.vram_allocated_mb;
+  const peak = item?.vram_peak_mb;
+  const mb = reserved ?? allocated ?? peak;
+  if (mb == null) return "—";
+  const text = mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(0)} MB`;
+  if (allocated != null && reserved != null && Math.abs(reserved - allocated) > 1) {
+    const live = allocated >= 1024 ? `${(allocated / 1024).toFixed(2)} GB` : `${allocated.toFixed(0)} MB`;
+    return `${text}（占用） / ${live} 张量`;
+  }
+  return text;
+}
+
 function statusLabel(value) {
   return STATUS[value] || value || "—";
 }
@@ -211,6 +225,7 @@ async function jobDetailPage(jobId) {
             <th scope="col">加载</th>
             <th scope="col">推理</th>
             <th scope="col">编码</th>
+            <th scope="col">显存</th>
             <th scope="col">GPU 秒</th>
             <th scope="col">费用</th>
             <th scope="col">输入</th>
@@ -224,6 +239,7 @@ async function jobDetailPage(jobId) {
               <td>${item.load_ms != null ? item.load_ms.toFixed(0) + "ms" : "—"}</td>
               <td>${item.infer_ms != null ? item.infer_ms.toFixed(0) + "ms" : "—"}</td>
               <td>${item.encode_ms != null ? item.encode_ms.toFixed(0) + "ms" : "—"}</td>
+              <td class="mono">${formatVram(item)}</td>
               <td class="mono">${(item.gpu_seconds || 0).toFixed(4)}</td>
               <td class="mono">${formatUsd(item.cost_usd)}</td>
               <td class="mono">${item.modal_input_id || "—"}</td>
@@ -343,8 +359,8 @@ function generatePage(meta) {
       </table>
       <h3 class="section">事件</h3>
       <table>
-        <thead><tr><th scope="col">时间</th><th scope="col">类型</th><th scope="col">模型</th><th scope="col">GPU</th><th scope="col">秒</th><th scope="col">$</th></tr></thead>
-        <tbody id="ledger-events"><tr><td colspan="6">加载中…</td></tr></tbody>
+        <thead><tr><th scope="col">时间</th><th scope="col">类型</th><th scope="col">模型</th><th scope="col">GPU</th><th scope="col">显存</th><th scope="col">秒</th><th scope="col">$</th></tr></thead>
+        <tbody id="ledger-events"><tr><td colspan="7">加载中…</td></tr></tbody>
       </table>
       <div class="pager">
         <button type="button" class="ghost" id="ledger-prev">上一页</button>
@@ -516,10 +532,11 @@ function renderLedger(ledger) {
             <td>${item.kind}</td>
             <td>${item.model || "—"}</td>
             <td>${item.actual_gpu || item.requested_gpu || "—"}</td>
+            <td class="mono">${formatVram(item)}</td>
             <td class="mono">${Number(item.gpu_seconds || 0).toFixed(3)}</td>
             <td class="mono">${formatUsd(item.cost_usd)}</td>
           </tr>`).join("")
-      : `<tr><td colspan="6">${ledger.error || "这个周期没有事件。"}</td></tr>`;
+      : `<tr><td colspan="7">${ledger.error || "这个周期没有事件。"}</td></tr>`;
   }
   const page = document.getElementById("ledger-page");
   if (page) page.textContent = `第 ${ledger.page || 1} / ${ledger.pages || 1} 页 · ${ledger.total || 0} 条`;
@@ -744,6 +761,7 @@ async function openLightbox(imageId) {
         <dt>尺寸</dt><dd>${image.width} × ${image.height}</dd>
         <dt>耗时</dt><dd>${image.latency_ms ? (image.latency_ms / 1000).toFixed(2) + "s" : "—"}</dd>
         <dt>推理</dt><dd>${image.infer_ms != null ? image.infer_ms.toFixed(0) + " ms" : "—"}</dd>
+        <dt>显存</dt><dd class="mono">${formatVram(image)}</dd>
         <dt>费用</dt><dd>${formatUsd(image.cost_usd)}</dd>
         <dt>调用</dt><dd class="mono">${image.modal_function_call_id || "—"}</dd>
         <dt>输入</dt><dd class="mono">${image.modal_input_id || "—"}</dd>
