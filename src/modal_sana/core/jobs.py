@@ -45,6 +45,7 @@ class JobService:
         self._cancel: set[str] = set()
         self._lock = threading.Lock()
         self._run_spans: dict[str, str] = {}
+        self._map_spans: dict[str, str] = {}
 
     def create_job(self, specs: list[PromptSpec], config: JobConfig) -> JobSummary:
         get_model(config.model)
@@ -189,7 +190,7 @@ class JobService:
                 if meta:
                     run_fields["modal_app_id"] = meta.get("modal_app_id")
                     run_fields["extra"] = meta
-                    self._apply_run_meta(job_id, meta, parent_span_id=run_fields["span_id"])
+                    self._apply_run_meta(job_id, meta)
         except Exception as exc:
             self._update_job(job_id, status="failed", error=str(exc), completed_at=now())
             self.events.publish(Event("job.failed", job_id, {"error": str(exc)}))
@@ -405,37 +406,53 @@ class JobService:
         while remaining and job_id not in self._cancel:
             inflight = {item.id: item for item in remaining}
             failed_this_round: list[tuple[GenerationRow, str]] = []
-            for result in run_batches(
-                remaining,
-                generator,
-                batch_size=config.batch_size,
+            with span(
+                self.db,
+                "modal.map",
+                job_id,
+                kind="modal",
+                parent_span_id=self._run_spans.get(job_id),
                 gpu=config.gpu,
-                workers=config.workers,
                 model=config.model,
-                retry=config.retry,
-                deployed=config.deployed,
-            ):
-                generation = inflight.pop(result.generation_id, None)
-                if generation is None:
-                    continue
-                if result.error or not result.image_bytes:
-                    self._record_generation_telemetry(generation, result)
-                    failed_this_round.append((generation, result.error or "empty image"))
-                    continue
-                self._persist_success(generation, result)
-                self.events.publish(
-                    Event(
-                        "image.completed",
-                        job_id,
-                        {
-                            "generation_id": generation.id,
-                            "progress": self._progress(job_id),
-                            "cost_usd": self.get_job(job_id).cost_usd,
-                        },
-                    )
-                )
-                if job_id in self._cancel:
-                    break
+            ) as map_fields:
+                self._map_spans[job_id] = map_fields["span_id"]
+                try:
+                    for result in run_batches(
+                        remaining,
+                        generator,
+                        batch_size=config.batch_size,
+                        gpu=config.gpu,
+                        workers=config.workers,
+                        model=config.model,
+                        retry=config.retry,
+                        deployed=config.deployed,
+                    ):
+                        generation = inflight.pop(result.generation_id, None)
+                        if generation is None:
+                            continue
+                        if result.error or not result.image_bytes:
+                            self._record_generation_telemetry(generation, result)
+                            failed_this_round.append((generation, result.error or "empty image"))
+                            continue
+                        self._persist_success(generation, result)
+                        self.events.publish(
+                            Event(
+                                "image.completed",
+                                job_id,
+                                {
+                                    "generation_id": generation.id,
+                                    "progress": self._progress(job_id),
+                                    "cost_usd": self.get_job(job_id).cost_usd,
+                                },
+                            )
+                        )
+                        if job_id in self._cancel:
+                            break
+                finally:
+                    meta = getattr(generator, "last_meta", {}) or {}
+                    map_fields["modal_app_id"] = meta.get("modal_app_id")
+                    map_fields["extra"] = meta
+                    self._map_spans.pop(job_id, None)
 
             for generation in inflight.values():
                 failed_this_round.append((generation, "worker did not return a result"))
@@ -666,7 +683,8 @@ class JobService:
             name="modal.generate",
             job_id=generation.job_id,
             kind="modal",
-            parent_span_id=self._run_spans.get(generation.job_id),
+            parent_span_id=self._map_spans.get(generation.job_id)
+            or self._run_spans.get(generation.job_id),
             generation_id=generation.id,
             status="error" if result.error else "ok",
             started_at=started,
@@ -681,7 +699,7 @@ class JobService:
             extra=tel,
         )
 
-    def _apply_run_meta(self, job_id: str, meta: dict[str, Any], parent_span_id: str | None) -> None:
+    def _apply_run_meta(self, job_id: str, meta: dict[str, Any]) -> None:
         fields: dict[str, Any] = {}
         if meta.get("modal_app_id"):
             fields["modal_app_id"] = meta["modal_app_id"]
@@ -689,25 +707,6 @@ class JobService:
             fields["modal_run_url"] = meta["modal_run_url"]
         if fields:
             self._update_job(job_id, **fields)
-        wall = meta.get("map_wall_ms")
-        if not wall:
-            return
-        ended = now()
-        started = ended - timedelta(milliseconds=float(wall))
-        write_span(
-            self.db,
-            name="modal.map",
-            job_id=job_id,
-            kind="modal",
-            parent_span_id=parent_span_id,
-            started_at=started,
-            ended_at=ended,
-            duration_ms=float(wall),
-            gpu=meta.get("gpu"),
-            model=meta.get("model"),
-            modal_app_id=meta.get("modal_app_id"),
-            extra=meta,
-        )
 
 
 def _maybe_float(value: Any) -> float | None:

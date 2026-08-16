@@ -25,7 +25,7 @@ def test_proxy_env_reports_https(monkeypatch) -> None:
 def test_doctor_includes_proxy_extra() -> None:
     report = run_doctor()
     names = {check.name for check in report.checks}
-    assert "modal[api-proxy-support]" in names
+    assert "api-proxy-support" in names
     assert "Modal API proxy" in names
     extra_ok, extra_detail = _proxy_extra()
     assert extra_ok, extra_detail

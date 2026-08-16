@@ -16,12 +16,16 @@ def test_dry_run_records_spans_and_zero_cost(service: JobService) -> None:
     assert final.cost_usd == 0
     assert (final.gpu_seconds or 0) == 0
 
-    names = {row.name for row in list_spans(service.db, job.id)}
+    spans = list_spans(service.db, job.id)
+    names = {row.name for row in spans}
     assert "job.create" in names
     assert "job.run" in names
     assert "modal.generate" in names
     assert "persist.image" in names
     assert "modal.map" in names
+    by_name = {row.name: row for row in spans if row.name in {"job.run", "modal.map", "modal.generate"}}
+    assert by_name["modal.map"].parent_span_id == by_name["job.run"].span_id
+    assert by_name["modal.generate"].parent_span_id == by_name["modal.map"].span_id
 
     detail = service.get_job_detail(job.id)
     assert detail["cost"]["cost_usd"] == 0

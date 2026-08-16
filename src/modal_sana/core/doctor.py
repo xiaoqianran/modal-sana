@@ -54,7 +54,7 @@ def run_doctor() -> DoctorReport:
         report.add("Modal workspace", bool(token_id), workspace or "unknown until first run")
 
     extra_ok, extra_detail = _proxy_extra()
-    report.add("modal[api-proxy-support]", extra_ok, extra_detail)
+    report.add("api-proxy-support", extra_ok, extra_detail)
 
     proxy_ok, proxy_detail = _proxy_env()
     report.add("Modal API proxy", proxy_ok, proxy_detail)
