@@ -16,3 +16,8 @@ def get_model(model_id: str) -> ModelSpec:
 
 def list_models() -> list[ModelSpec]:
     return list(SANA_MODELS)
+
+
+def native_size(model_id: str) -> tuple[int, int]:
+    spec = get_model(model_id)
+    return spec.native_width, spec.native_height

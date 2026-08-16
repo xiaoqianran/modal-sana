@@ -23,8 +23,8 @@ OptGPU = Annotated[str, typer.Option("--gpu", "-g", help="Modal GPU id")]
 OptCount = Annotated[int, typer.Option("--count", "-n", help="Images per prompt")]
 OptSteps = Annotated[int | None, typer.Option("--steps", help="Inference steps")]
 OptGuidance = Annotated[float | None, typer.Option("--guidance", help="Guidance / CFG")]
-OptWidth = Annotated[int, typer.Option("--width", help="Image width")]
-OptHeight = Annotated[int, typer.Option("--height", help="Image height")]
+OptWidth = Annotated[int | None, typer.Option("--width", help="Image width. Default: model native.")]
+OptHeight = Annotated[int | None, typer.Option("--height", help="Image height. Default: model native.")]
 OptSeed = Annotated[int | None, typer.Option("--seed", help="Base seed; count expands +1")]
 OptBatch = Annotated[int, typer.Option("--batch-size", help="Images per GPU forward")]
 OptWorkers = Annotated[int, typer.Option("--workers", help="Concurrent Modal GPU containers")]
@@ -61,8 +61,8 @@ def job_config(
     count: int,
     steps: int | None,
     guidance: float | None,
-    width: int,
-    height: int,
+    width: int | None,
+    height: int | None,
     seed: int | None,
     batch_size: int,
     workers: int,
@@ -79,14 +79,17 @@ def job_config(
         fmt = "jpg"
     if fmt not in {"webp", "png", "jpg"}:
         raise typer.BadParameter("format must be webp, png, or jpg")
+    from modal_sana.models.sana.registry import get_model
+
+    spec = get_model(model)
     return JobConfig(
         model=model,
         gpu=gpu,
         count=count,
         steps=steps,
         guidance=guidance,
-        width=width,
-        height=height,
+        width=width or spec.native_width,
+        height=height or spec.native_height,
         seed=seed,
         batch_size=batch_size,
         workers=workers,

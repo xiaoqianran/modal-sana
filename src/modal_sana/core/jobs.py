@@ -50,6 +50,7 @@ class JobService:
     def create_job(self, specs: list[PromptSpec], config: JobConfig) -> JobSummary:
         get_model(config.model)
         get_gpu(config.gpu)
+        config = _with_native_size(config)
         if not specs:
             raise ValueError("No prompts to generate")
 
@@ -65,8 +66,9 @@ class JobService:
             model_id = spec.model or config.model
             get_model(model_id)
             steps, guidance = resolve_steps_guidance(spec, config)
-            width = spec.width or config.width
-            height = spec.height or config.height
+            model_spec = get_model(model_id)
+            width = spec.width or config.width or model_spec.native_width
+            height = spec.height or config.height or model_spec.native_height
             negative = spec.negative_prompt or config.negative_prompt
             count = spec.count if spec.count > 0 else config.count
             seeds = expand_seeds(spec.seed if spec.seed is not None else config.seed, count)
@@ -721,6 +723,16 @@ class JobService:
             fields["modal_run_url"] = meta["modal_run_url"]
         if fields:
             self._update_job(job_id, **fields)
+
+
+def _with_native_size(config: JobConfig) -> JobConfig:
+    spec = get_model(config.model)
+    updates: dict[str, Any] = {}
+    if config.width is None:
+        updates["width"] = spec.native_width
+    if config.height is None:
+        updates["height"] = spec.native_height
+    return config.model_copy(update=updates) if updates else config
 
 
 def _maybe_float(value: Any) -> float | None:

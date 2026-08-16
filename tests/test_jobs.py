@@ -13,6 +13,26 @@ class FailAll:
                 yield GenerateResult(generation_id=request.generation_id, error="boom")
 
 
+def test_job_uses_model_native_size(service: JobService) -> None:
+    job = service.create_job(
+        [PromptSpec(prompt="four k", count=1, seed=1)],
+        JobConfig(model="sana-1.6b-4k", dry_run=True, seed=1),
+    )
+    assert job.config.width == 4096
+    assert job.config.height == 4096
+    sprint = service.create_job(
+        [PromptSpec(prompt="sprint", count=1, seed=1)],
+        JobConfig(dry_run=True, seed=1),
+    )
+    assert sprint.config.width == 1024
+    override = service.create_job(
+        [PromptSpec(prompt="wide", count=1, seed=1)],
+        JobConfig(model="sana-1.5-1.6b", dry_run=True, seed=1, width=768, height=512),
+    )
+    assert override.config.width == 768
+    assert override.config.height == 512
+
+
 def test_create_and_run_dry(service: JobService) -> None:
     job = service.create_job(
         [PromptSpec(prompt="a white cat", count=3, seed=10)],

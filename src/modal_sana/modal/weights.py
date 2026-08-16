@@ -19,9 +19,11 @@ def is_model_ready(model_id: str, *, root: str | Path | None = None) -> bool:
 
 def models_to_prefetch(model: str | None, *, all_models: bool = False) -> list[str]:
     """Default is every registered SANA model. A name pins one snapshot."""
-    if all_models or not (model or "").strip():
+    if (model or "").strip():
+        return [get_model(model.strip()).id]
+    if all_models:
         return [spec.id for spec in list_models()]
-    return [get_model(model.strip()).id]
+    return [spec.id for spec in list_models() if spec.prefetch_by_default]
 
 
 def assert_model_ready(model_id: str, *, root: str | Path | None = None) -> Path:

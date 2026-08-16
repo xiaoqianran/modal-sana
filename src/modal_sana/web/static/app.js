@@ -26,16 +26,18 @@ async function api(path, options = {}) {
 }
 
 function defaultsFrom(meta) {
+  const modelId = meta?.defaults?.model || "sana-sprint-1.6b";
+  const model = (meta?.models || []).find((item) => item.id === modelId);
   return {
-    model: meta?.defaults?.model || "sana-sprint-1.6b",
+    model: modelId,
     gpu: meta?.defaults?.gpu || "L40S",
     count: 1,
-    width: 1024,
-    height: 1024,
+    width: model?.native_width || 1024,
+    height: model?.native_height || 1024,
     steps: "",
     guidance: "",
     seed: "",
-    batch_size: 4,
+    batch_size: model?.recommended_batch || 4,
     workers: 2,
     format: meta?.defaults?.image_format || "png",
     dry_run: false,
@@ -69,14 +71,22 @@ function gpuChoices(meta) {
 function modelChoices(meta) {
   return (meta.models || []).map((model) => ({
     id: model.id,
-    name: model.name || model.id,
+    name: `${model.name || model.id} · ${model.native_width || 1024}×${model.native_height || 1024}`,
   }));
+}
+
+function applyModelNative(form, meta) {
+  const model = (meta.models || []).find((item) => item.id === form.model?.value);
+  if (!model) return;
+  if (form.width) form.width.value = model.native_width || 1024;
+  if (form.height) form.height.value = model.native_height || 1024;
+  if (form.batch_size && model.recommended_batch) form.batch_size.value = model.recommended_batch;
 }
 
 function settingsGrid(d, meta) {
   return `
     <div class="grid">
-      ${select("model", "Model（只换权重，不换卡）", modelChoices(meta), d.model)}
+      ${select("model", "Model（换模型会改到该权重的原生分辨率）", modelChoices(meta), d.model)}
       ${select("gpu", "GPU（必须单独选；默认 L40S）", gpuChoices(meta), d.gpu)}
       ${field("count", "Count", d.count, "number")}
       ${field("width", "Width", d.width, "number")}
@@ -307,7 +317,8 @@ function generatePage(meta) {
     clearTimeout(state.forecastTimer);
     state.forecastTimer = setTimeout(refresh, 280);
   });
-  form.addEventListener("change", () => {
+  form.addEventListener("change", (event) => {
+    if (event.target && event.target.name === "model") applyModelNative(form, meta);
     updateWillApply(form, meta);
     refresh();
   });
@@ -359,7 +370,11 @@ function updateWillApply(form, meta) {
   const runtime = meta.runtime || {};
   const prefer = payload.prefer_deployed !== false;
   const path = !prefer ? "ephemeral (forced)" : runtime.would_use || "auto";
-  line.textContent = `will request GPU=${payload.gpu}  model=${payload.model}  ${payload.width}×${payload.height}  steps=${steps}  count=${payload.count}  ·  ${path}`;
+  const native = model ? `${model.native_width}×${model.native_height}` : "";
+  const sizeNote = model && payload.width === model.native_width && payload.height === model.native_height
+    ? "native"
+    : native ? `native ${native}` : "";
+  line.textContent = `will request GPU=${payload.gpu}  model=${payload.model}  ${payload.width}×${payload.height}${sizeNote ? ` (${sizeNote})` : ""}  steps=${steps}  count=${payload.count}  ·  ${path}`;
   const runtimeLine = document.getElementById("runtime-line");
   if (runtimeLine) runtimeLine.textContent = runtime.note || "";
   if (gpu && model && gpu.vram_gb < (model.min_vram_gb || 0)) {
@@ -494,6 +509,9 @@ function batchPage(meta) {
     drop.classList.remove("over");
     if (event.dataTransfer.files[0]) fileInput.files = event.dataTransfer.files;
   };
+  document.getElementById("batch-form").addEventListener("change", (event) => {
+    if (event.target && event.target.name === "model") applyModelNative(event.currentTarget, meta);
+  });
   document.getElementById("batch-form").onsubmit = async (event) => {
     event.preventDefault();
     const button = event.target.querySelector("button");

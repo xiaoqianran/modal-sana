@@ -16,3 +16,8 @@ class ModelSpec:
     description: str
     min_vram_gb: int = 16
     recommended_gpu: str = "L40S"
+    native_width: int = 1024
+    native_height: int = 1024
+    recommended_batch: int = 4
+    vae_tiling: bool = False
+    prefetch_by_default: bool = True

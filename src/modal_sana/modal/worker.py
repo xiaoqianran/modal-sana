@@ -49,7 +49,25 @@ def _load_pipeline_cpu(model_id: str):
         pipe.vae.to(dtype)
     if hasattr(pipe, "text_encoder") and pipe.text_encoder is not None:
         pipe.text_encoder.to(torch.bfloat16)
+    if spec.vae_tiling:
+        _enable_vae_tiling(pipe)
     return pipe
+
+
+def _enable_vae_tiling(pipe) -> None:
+    """Official 2K/4K path. Avoids VAE OOM; must not run CUDA in snap=True beyond this."""
+    vae = getattr(pipe, "vae", None)
+    if vae is None or not hasattr(vae, "enable_tiling"):
+        return
+    try:
+        vae.enable_tiling(
+            tile_sample_min_height=1024,
+            tile_sample_min_width=1024,
+            tile_sample_stride_height=896,
+            tile_sample_stride_width=896,
+        )
+    except TypeError:
+        vae.enable_tiling()
 
 
 def _move_pipeline_cuda(pipe):
