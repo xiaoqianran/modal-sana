@@ -17,12 +17,14 @@ from modal_sana.core.ledger import PERIODS, Period
 from modal_sana.core.predict import predict_run
 from modal_sana.core.prompts import parse_prompt_file, parse_prompt_text
 from modal_sana.modal.billing import workspace_balance
+from modal_sana.modal.client import ensure_local_app_objects
 from modal_sana.modal.gpu import list_gpus
 from modal_sana.modal.ledger import load_dict_events, safe_query_shared_ledger
 from modal_sana.models.sana.registry import get_model, list_models
 from modal_sana.schemas.job import JobConfig, PromptSpec
 
 router = APIRouter(prefix="/api")
+ensure_local_app_objects()
 _settings = load_settings()
 _events = EventBus()
 _service = JobService(_settings, events=_events)
