@@ -22,7 +22,7 @@ def prefetch(
         bool | None,
         typer.Option(
             "--deployed/--ephemeral",
-            help="Call the deployed app or force ephemeral. Default: deployed if it exists.",
+            help="Call the deployed app or force ephemeral. Default: deploy the app if missing.",
         ),
     ] = None,
 ) -> None:
@@ -34,14 +34,14 @@ def prefetch(
 
     from modal_sana.modal.app import app
     from modal_sana.modal.client import ensure_local_app_objects
-    from modal_sana.modal.deploy_mode import resolve_deploy_mode
+    from modal_sana.modal.deploy_mode import ensure_deployed_or_fallback
     from modal_sana.modal.prefetch import list_volume_models, prefetch_model
 
     ids = models_to_prefetch(model, all_models=all_models)
     secrets = modal_download_secrets()
     ensure_local_app_objects()
 
-    decision = resolve_deploy_mode(deployed)
+    decision = ensure_deployed_or_fallback(deployed)
     console.print(f"Modal: [bold]{decision.mode}[/bold] ({decision.reason})")
 
     if decision.use_deployed:
