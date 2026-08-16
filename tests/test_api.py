@@ -64,6 +64,11 @@ def test_meta_and_health(monkeypatch) -> None:
     assert client.get("/api/health").json()["status"] == "ok"
     meta = client.get("/api/meta").json()
     assert any(model["id"] == "sana-sprint-1.6b" for model in meta["models"])
+    sprint = next(model for model in meta["models"] if model["id"] == "sana-sprint-1.6b")
+    assert sprint["native_width"] == 1024
+    fourk = next(model for model in meta["models"] if model["id"] == "sana-1.6b-4k")
+    assert fourk["native_width"] == 4096
+    assert fourk["vae_tiling"] is True
     assert any(gpu["id"] == "L40S" for gpu in meta["gpus"])
     assert any(gpu["id"] == "H100" and gpu["usd_per_second"] > 0 for gpu in meta["gpus"])
     assert meta["runtime"]["would_use"] == "deployed"

@@ -59,9 +59,12 @@ def test_download_writes_snapshot(tmp_path: Path, monkeypatch) -> None:
 
 def test_prefetch_default_is_all_models() -> None:
     ids = models_to_prefetch(None)
-    assert ids == [spec.id for spec in list_models()]
+    assert "sana-sprint-1.6b" in ids
+    assert "sana-1.6b-4k" not in ids
     assert len(ids) >= 5
-    assert models_to_prefetch(None, all_models=True) == ids
+    all_ids = models_to_prefetch(None, all_models=True)
+    assert all_ids == [spec.id for spec in list_models()]
+    assert "sana-1.6b-4k" in all_ids
     assert models_to_prefetch("sana-sprint-0.6b") == ["sana-sprint-0.6b"]
 
 

@@ -52,8 +52,8 @@ class CreateJobBody(BaseModel):
     count: int = 1
     model: str = "sana-sprint-1.6b"
     gpu: str = "L40S"
-    width: int = 1024
-    height: int = 1024
+    width: int | None = None
+    height: int | None = None
     steps: int | None = None
     guidance: float | None = None
     seed: int | None = None
@@ -69,11 +69,12 @@ class CreateJobBody(BaseModel):
 
 
 def _config_from_body(body: CreateJobBody) -> JobConfig:
+    spec = get_model(body.model)
     return JobConfig(
         model=body.model,
         gpu=body.gpu,
-        width=body.width,
-        height=body.height,
+        width=body.width or spec.native_width,
+        height=body.height or spec.native_height,
         steps=body.steps,
         guidance=body.guidance,
         seed=body.seed,
@@ -242,8 +243,8 @@ async def create_job_from_file(
     model: str = "sana-sprint-1.6b",
     gpu: str = "L40S",
     count: int = 1,
-    width: int = 1024,
-    height: int = 1024,
+    width: int | None = None,
+    height: int | None = None,
     steps: int | None = None,
     guidance: float | None = None,
     seed: int | None = None,
@@ -263,12 +264,13 @@ async def create_job_from_file(
     finally:
         tmp.unlink(missing_ok=True)
     fmt = image_format if image_format in {"webp", "png", "jpg"} else "png"
+    spec = get_model(model)
     config = JobConfig(
         model=model,
         gpu=gpu,
         count=count,
-        width=width,
-        height=height,
+        width=width or spec.native_width,
+        height=height or spec.native_height,
         steps=steps,
         guidance=guidance,
         seed=seed,

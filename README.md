@@ -102,11 +102,11 @@ uv run modal-sana resume job_01K...
 uv run modal-sana web
 ```
 
-默认：`sana-sprint-1.6b` · `L40S` · `1024×1024` · `2 steps` · `png`。
+默认：`sana-sprint-1.6b` · `L40S` · **该模型原生 1024×1024** · `2 steps` · `png`。换模型会改到该权重的原生分辨率（1.5 仍是 1024；4K 请选 `sana-1.6b-4k` → 4096²）。
 
 ```bash
 uv run modal-sana models
-uv run modal-sana prefetch                 # CPU 并行下载全部 SANA 到 Volume
+uv run modal-sana prefetch                 # CPU 下载常用 1024 模型（不含 2K/4K）
 uv run modal-sana prefetch sana-sprint-1.6b
 uv run modal-sana prefetch --all
 uv run modal-sana prefetch --status

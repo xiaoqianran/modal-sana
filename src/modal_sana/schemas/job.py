@@ -14,8 +14,8 @@ TaskStatus = Literal["pending", "running", "completed", "failed", "retrying", "c
 class JobConfig(BaseModel):
     model: str = "sana-sprint-1.6b"
     gpu: str = "L40S"
-    width: int = 1024
-    height: int = 1024
+    width: int | None = None
+    height: int | None = None
     steps: int | None = None
     guidance: float | None = None
     seed: int | None = None

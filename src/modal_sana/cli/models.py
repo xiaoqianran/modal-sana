@@ -12,6 +12,7 @@ def models() -> None:
     table = Table(title="Models")
     table.add_column("ID")
     table.add_column("NAME")
+    table.add_column("NATIVE")
     table.add_column("STEPS")
     table.add_column("PIPELINE")
     table.add_column("NOTES")
@@ -19,6 +20,7 @@ def models() -> None:
         table.add_row(
             spec.id,
             spec.name,
+            f"{spec.native_width}×{spec.native_height}",
             str(spec.default_steps),
             spec.pipeline,
             spec.description,
