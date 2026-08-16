@@ -282,6 +282,9 @@ class JobService:
                 "load_ms": item.load_ms,
                 "infer_ms": item.infer_ms,
                 "encode_ms": item.encode_ms,
+                "vram_allocated_mb": item.vram_allocated_mb,
+                "vram_reserved_mb": item.vram_reserved_mb,
+                "vram_peak_mb": item.vram_peak_mb,
                 "modal_function_call_id": item.modal_function_call_id,
                 "modal_input_id": item.modal_input_id,
             }
@@ -676,6 +679,8 @@ class JobService:
         row.modal_function_call_id = tel.get("modal_function_call_id") or row.modal_function_call_id
         row.modal_input_id = tel.get("modal_input_id") or row.modal_input_id
         row.vram_allocated_mb = _maybe_float(tel.get("vram_allocated_mb"))
+        row.vram_reserved_mb = _maybe_float(tel.get("vram_reserved_mb"))
+        row.vram_peak_mb = _maybe_float(tel.get("vram_peak_mb"))
         row.extra_json = json.dumps(tel, default=str)
         job.gpu_seconds = (job.gpu_seconds or 0.0) - prev_seconds + gpu_seconds
         job.cost_usd = (job.cost_usd or 0.0) - prev_cost + cost
@@ -806,6 +811,9 @@ def _image_record(image: ImageRow, generation: GenerationRow) -> ImageRecord:
         load_ms=generation.load_ms,
         encode_ms=generation.encode_ms,
         gpu_seconds=generation.gpu_seconds,
+        vram_allocated_mb=generation.vram_allocated_mb,
+        vram_reserved_mb=generation.vram_reserved_mb,
+        vram_peak_mb=generation.vram_peak_mb,
         modal_function_call_id=generation.modal_function_call_id,
         modal_input_id=generation.modal_input_id,
         created_at=image.created_at,
@@ -831,5 +839,7 @@ def _generation_dict(item: GenerationRow) -> dict[str, Any]:
         "modal_function_call_id": item.modal_function_call_id,
         "modal_input_id": item.modal_input_id,
         "vram_allocated_mb": item.vram_allocated_mb,
+        "vram_reserved_mb": item.vram_reserved_mb,
+        "vram_peak_mb": item.vram_peak_mb,
         **_runtime_fields(_parse_extra(item.extra_json)),
     }

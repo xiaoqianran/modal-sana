@@ -25,6 +25,8 @@ class CostEvent:
     infer_ms: float | None = None
     encode_ms: float | None = None
     vram_allocated_mb: float | None = None
+    vram_reserved_mb: float | None = None
+    vram_peak_mb: float | None = None
     width: int | None = None
     height: int | None = None
     steps: int | None = None

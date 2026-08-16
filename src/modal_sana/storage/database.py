@@ -108,6 +108,8 @@ class GenerationRow(SQLModel, table=True):
     infer_ms: float | None = None
     encode_ms: float | None = None
     vram_allocated_mb: float | None = None
+    vram_reserved_mb: float | None = None
+    vram_peak_mb: float | None = None
     extra_json: str | None = None
 
 
@@ -163,6 +165,8 @@ _GENERATION_MIGRATIONS = {
     "infer_ms": "FLOAT",
     "encode_ms": "FLOAT",
     "vram_allocated_mb": "FLOAT",
+    "vram_reserved_mb": "FLOAT",
+    "vram_peak_mb": "FLOAT",
     "extra_json": "TEXT",
 }
 

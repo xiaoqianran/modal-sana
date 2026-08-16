@@ -321,6 +321,8 @@ def _iter_results(
                 "gpu_seconds": item.get("gpu_seconds"),
                 "cold_start": bool(item.get("cold_start")),
                 "vram_allocated_mb": item.get("vram_allocated_mb"),
+                "vram_reserved_mb": item.get("vram_reserved_mb"),
+                "vram_peak_mb": item.get("vram_peak_mb"),
                 "modal_function_call_id": item.get("modal_function_call_id")
                 or batch_ids["modal_function_call_id"],
                 "modal_input_id": item.get("modal_input_id") or batch_ids["modal_input_id"],
