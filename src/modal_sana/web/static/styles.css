@@ -26,6 +26,10 @@
     block-size: auto;
   }
 
+  :where(svg) {
+    fill: currentColor;
+  }
+
   :where(input:is([type="checkbox"], [type="radio"]), select, label, button) {
     cursor: pointer;
   }
@@ -49,56 +53,46 @@
 
 @layer tokens {
   :root {
-    color-scheme: dark;
-    accent-color: var(--peach);
+    color-scheme: light;
+    accent-color: var(--prussian);
     font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", sans-serif;
     font-feature-settings: "ss06";
-    --crust: #11111b;
-    --mantle: #181825;
-    --base: #1e1e2e;
-    --surface0: #313244;
-    --surface1: #45475a;
-    --overlay0: #6c7086;
-    --overlay1: #7f849c;
-    --subtext: #a6adc8;
-    --text: #cdd6f4;
-    --peach: #fab387;
-    --mauve: #cba6f7;
-    --teal: #94e2d5;
-    --red: #f38ba8;
-    --yellow: #f9e2af;
-    --shadow: 0 1.25rem 2.5rem rgb(17 17 27 / 0.45);
+    --paper: #e8edf2;
+    --sheet: #f7f9fb;
+    --ink: #1c2430;
+    --mute: #5c6778;
+    --rule: #c5ced8;
+    --prussian: #215a78;
+    --copper: #b56a3a;
+    --ok: #2f7d5b;
+    --bad: #c45c4a;
+    --warn: #9a6b24;
+    --shadow: 0 0.75rem 1.75rem rgb(28 36 48 / 0.08);
   }
 
-  @media (prefers-color-scheme: light) {
+  @media (prefers-color-scheme: dark) {
     :root {
-      color-scheme: light;
-      --crust: #dce0e8;
-      --mantle: #e6e9ef;
-      --base: #eff1f5;
-      --surface0: #ccd0da;
-      --surface1: #bcc0cc;
-      --overlay0: #9ca0b0;
-      --overlay1: #8c8fa1;
-      --subtext: #6c6f85;
-      --text: #4c4f69;
-      --peach: #fe640b;
-      --mauve: #8839ef;
-      --teal: #179299;
-      --red: #d20f39;
-      --yellow: #df8e1d;
-      --shadow: 0 1.25rem 2.5rem rgb(76 79 105 / 0.12);
+      color-scheme: dark;
+      --paper: #10151c;
+      --sheet: #171e27;
+      --ink: #e6edf4;
+      --mute: #93a0b0;
+      --rule: #2c3642;
+      --prussian: #7eb6d4;
+      --copper: #d4895a;
+      --ok: #7dba9a;
+      --bad: #e07a6a;
+      --warn: #e0b36a;
+      --shadow: 0 0.75rem 1.75rem rgb(0 0 0 / 0.35);
     }
   }
 }
 
 @layer layout {
   body {
-    background:
-      radial-gradient(48rem 22rem at 0% 0%, color-mix(in oklab, var(--mauve) 14%, transparent), transparent 55%),
-      var(--crust);
-    color: var(--text);
-    line-height: 1.55;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.5;
   }
 
   .skip {
@@ -106,10 +100,9 @@
     inset-inline-start: 0.75rem;
     inset-block-start: 0.75rem;
     transform: translateY(-200%);
-    background: var(--peach);
-    color: var(--crust);
+    background: var(--prussian);
+    color: var(--sheet);
     padding: 0.5rem 0.85rem;
-    border-radius: 999px;
     z-index: 8;
   }
 
@@ -117,151 +110,122 @@
     transform: none;
   }
 
-  .app {
+  .mast {
     display: grid;
-    grid-template-columns: 15.5rem minmax(0, 1fr);
-    min-block-size: 100dvh;
-  }
-
-  .rail {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    padding: 1.75rem 1.15rem 1.25rem 1.6rem;
-    background: var(--mantle);
-    border-inline-end: 1px solid var(--surface0);
-  }
-
-  .sprocket {
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-    inline-size: 0.7rem;
-    background:
-      radial-gradient(circle at 50% 0.55rem, var(--crust) 0.18rem, transparent 0.2rem) 0 0 / 0.7rem 1.15rem,
-      linear-gradient(var(--mauve), var(--peach));
-    opacity: 0.88;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 1rem 1.75rem;
+    align-items: center;
+    padding: 1rem clamp(1.1rem, 3vw, 2.25rem);
+    border-block-end: 1px solid var(--rule);
+    background: var(--sheet);
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 4;
   }
 
   .brand {
     display: flex;
-    gap: 0.75rem;
     align-items: center;
-    margin-block-end: 2rem;
-  }
-
-  .brand strong {
-    display: block;
-    font-family: "Noto Serif SC", "Source Han Serif SC", serif;
-    font-size: clamp(1.15rem, 0.9rem + 0.6vw, 1.4rem);
+    gap: 0.7rem;
+    color: var(--ink);
+    text-decoration: none;
     font-weight: 700;
+    letter-spacing: -0.03em;
   }
 
-  .brand p {
-    margin: 0;
-    color: var(--subtext);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    font-size: 0.68rem;
+  .brand:hover {
+    text-decoration: none;
+    color: var(--prussian);
   }
 
   .mark {
-    inline-size: 2.1rem;
-    block-size: 2.1rem;
-    border-radius: 0.65rem;
-    background: conic-gradient(from 210deg, var(--peach), var(--mauve), var(--teal), var(--peach));
-    box-shadow: inset 0 0 0 0.28rem var(--mantle);
+    inline-size: 1.4rem;
+    block-size: 1.4rem;
+    background: var(--prussian);
+    box-shadow: inset -0.85rem 0 0 var(--copper);
     flex: none;
+  }
+
+  .brand-name {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 1rem;
+    font-weight: 500;
   }
 
   nav {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 0.2rem;
   }
 
   nav a {
-    color: var(--subtext);
+    color: var(--mute);
     text-decoration: none;
-    padding: 0.65rem 0.8rem;
-    border-radius: 0.7rem;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.95rem;
   }
 
   nav a:hover,
   nav a[aria-current="page"] {
-    color: var(--text);
-    background: var(--surface0);
+    color: var(--ink);
+    text-decoration: none;
   }
 
   nav a[aria-current="page"] {
-    box-shadow: inset 0.18rem 0 0 var(--mauve);
+    box-shadow: inset 0 -0.12rem 0 var(--prussian);
   }
 
-  .rail-foot {
-    margin-block-start: auto;
-    color: var(--subtext);
-    font-size: 0.78rem;
+  .mast-status {
+    margin: 0;
+    color: var(--mute);
+    font-size: 0.75rem;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
+    text-align: end;
+    max-inline-size: 22rem;
   }
 
   main {
-    padding: 2.25rem clamp(1.25rem, 4vw, 3rem) 4rem;
-    max-inline-size: 80rem;
+    padding: 2.1rem clamp(1rem, 4vw, 2.75rem) 4.5rem;
+    max-inline-size: 64rem;
     min-inline-size: 0;
+    margin-inline: auto;
   }
 
-  @media (max-width: 56rem) {
-    .app {
+  @media (max-width: 52rem) {
+    .mast {
       grid-template-columns: 1fr;
+      align-items: start;
     }
 
-    .rail {
-      border-inline-end: 0;
-      border-block-end: 1px solid var(--surface0);
-      padding-inline-start: 1.6rem;
-    }
-
-    nav {
-      flex-direction: row;
-      flex-wrap: wrap;
-    }
-
-    .grid,
-    .forecast,
-    .snapshots {
-      grid-template-columns: 1fr;
-    }
-
-    .lightbox {
-      grid-template-columns: 1fr;
-      padding: 1rem;
+    .mast-status {
+      text-align: start;
+      max-inline-size: none;
     }
   }
 }
 
 @layer components {
   h1 {
-    font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+    font-size: clamp(1.7rem, 1.25rem + 1.3vw, 2.2rem);
     font-weight: 700;
-    font-size: clamp(1.8rem, 1.2rem + 1.6vw, 2.5rem);
     margin: 0 0 0.4rem;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.04em;
   }
 
   h2.section,
   h3.section {
-    font-family: "Noto Serif SC", "Source Han Serif SC", serif;
     font-weight: 600;
-    margin: 1.6rem 0 0.7rem;
+    margin: 1.5rem 0 0.65rem;
+    letter-spacing: -0.02em;
   }
 
-  h2.section { font-size: 1.25rem; }
-  h3.section { font-size: 1.05rem; }
+  h2.section { font-size: 1.1rem; }
+  h3.section { font-size: 0.98rem; }
 
   .lede {
-    color: var(--subtext);
-    margin: 0 0 1.5rem;
-    max-inline-size: 42rem;
+    color: var(--mute);
+    margin: 0 0 1.25rem;
+    max-inline-size: 40rem;
   }
 
   .lede code,
@@ -270,26 +234,38 @@
     font-size: 0.92em;
   }
 
+  .sheet,
   .panel {
-    background: var(--base);
-    border: 1px solid var(--surface0);
-    border-radius: 1.05rem;
-    padding: 1.25rem;
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    padding: 1.5rem 1.55rem 1.6rem;
     box-shadow: var(--shadow);
   }
 
+  .sheet {
+    border-inline-start: 0.42rem solid var(--prussian);
+  }
+
+  fieldset.dials,
   fieldset.settings {
     border: 0;
-    margin: 1.1rem 0 0;
+    margin: 1rem 0 0;
     padding: 0;
   }
 
+  fieldset.dials legend,
   fieldset.settings legend {
     padding: 0;
-    margin-block-end: 0.7rem;
-    color: var(--subtext);
-    font-size: 0.78rem;
+    margin-block-end: 0.55rem;
+    color: var(--mute);
+    font-size: 0.72rem;
     letter-spacing: 0.08em;
+  }
+
+  .dials {
+    display: grid;
+    grid-template-columns: minmax(11rem, 1.5fr) minmax(11rem, 1.5fr) 5.75rem 6.75rem;
+    gap: 1rem 1.1rem;
   }
 
   .field {
@@ -299,58 +275,115 @@
   .field label,
   label:not(.check) {
     display: block;
-    color: var(--subtext);
-    font-size: 0.78rem;
-    margin-block-end: 0.35rem;
+    color: var(--mute);
+    font-size: 0.75rem;
+    margin-block-end: 0.3rem;
   }
 
   textarea,
   input,
   select {
     inline-size: 100%;
-    background: var(--mantle);
-    color: var(--text);
-    border: 1px solid var(--surface0);
-    border-radius: 0.7rem;
-    padding: 0.7rem 0.85rem;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 0;
+    padding: 0.7rem 0.8rem;
     font: inherit;
+    min-block-size: 2.65rem;
+  }
+
+  select {
+    appearance: none;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--mute) 50%),
+      linear-gradient(135deg, var(--mute) 50%, transparent 50%);
+    background-position:
+      calc(100% - 1.05rem) calc(50% - 0.15rem),
+      calc(100% - 0.7rem) calc(50% - 0.15rem);
+    background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+    background-repeat: no-repeat;
+    padding-inline-end: 1.8rem;
   }
 
   textarea {
-    min-block-size: 9.5rem;
+    min-block-size: 13.5rem;
     resize: vertical;
+    font-size: 1.06rem;
+    line-height: 1.7;
+    padding: 0.95rem 1rem;
+  }
+
+  .sheet > label[for="field-prompt"] {
+    font-size: 0.75rem;
+    color: var(--mute);
+    margin-block-end: 0.35rem;
   }
 
   :where(input, select, textarea):focus-visible,
   :where(button, .btn, a):focus-visible {
-    outline: 2px solid var(--mauve);
+    outline: 2px solid var(--prussian);
     outline-offset: 2px;
   }
 
   .grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.85rem;
+    gap: 0.75rem;
     margin-block: 0.2rem 0.4rem;
+  }
+
+  details.advanced,
+  details.ledger {
+    margin-block-start: 1.15rem;
+    border-block-start: 1px solid var(--rule);
+    padding-block-start: 0.85rem;
+  }
+
+  details.advanced summary,
+  details.ledger summary {
+    cursor: pointer;
+    color: var(--mute);
+    font-size: 0.9rem;
+    padding-block: 0.2rem;
+    list-style: none;
+  }
+
+  details.advanced summary::-webkit-details-marker,
+  details.ledger summary::-webkit-details-marker {
+    display: none;
+  }
+
+  details.advanced summary::before,
+  details.ledger summary::before {
+    content: "▸ ";
+    color: var(--prussian);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  details[open] > summary::before {
+    content: "▾ ";
   }
 
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.7rem;
+    gap: 0.65rem;
     align-items: center;
+    margin-block-start: 1rem;
   }
 
   button,
   .btn {
     appearance: none;
     border: 0;
-    background: var(--peach);
-    color: var(--crust);
+    background: var(--copper);
+    color: #fff;
     font-weight: 600;
-    padding: 0.7rem 1.1rem;
-    border-radius: 999px;
-    min-block-size: 2.5rem;
+    padding: 0.8rem 1.35rem;
+    min-block-size: 2.75rem;
+    letter-spacing: 0.02em;
+    min-inline-size: 2.5rem;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -359,8 +392,8 @@
   button.ghost,
   .btn.ghost {
     background: transparent;
-    color: var(--text);
-    border: 1px solid var(--surface1);
+    color: var(--ink);
+    border: 1px solid var(--rule);
   }
 
   button:disabled {
@@ -369,40 +402,38 @@
   }
 
   .progress {
-    margin-block-start: 1.1rem;
-    color: var(--subtext);
+    margin-block-start: 1rem;
+    color: var(--mute);
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
   }
 
   .bar {
-    block-size: 0.45rem;
-    background: var(--surface0);
-    border-radius: 99px;
+    block-size: 0.28rem;
+    background: var(--rule);
     overflow: hidden;
-    margin-block-start: 0.45rem;
+    margin-block-start: 0.4rem;
   }
 
   .bar > span {
     display: block;
     block-size: 100%;
     inline-size: 0;
-    background: linear-gradient(90deg, var(--peach), var(--mauve));
+    background: var(--copper);
   }
 
   .drop {
-    border: 1px dashed color-mix(in oklab, var(--mauve) 55%, var(--surface0));
-    border-radius: 1rem;
-    padding: 1.5rem;
+    border: 1px dashed var(--prussian);
+    padding: 1.35rem;
     text-align: center;
-    color: var(--subtext);
+    color: var(--mute);
     margin-block-end: 1rem;
-    background: color-mix(in oklab, var(--mauve) 6%, var(--base));
+    background: color-mix(in oklab, var(--prussian) 6%, var(--sheet));
   }
 
   .drop.over {
-    border-color: var(--peach);
-    color: var(--text);
+    background: color-mix(in oklab, var(--prussian) 12%, var(--sheet));
+    color: var(--ink);
   }
 
   table {
@@ -413,50 +444,48 @@
   th,
   td {
     text-align: start;
-    padding: 0.7rem 0.5rem;
-    border-block-end: 1px solid var(--surface0);
-    font-size: 0.9rem;
+    padding: 0.65rem 0.45rem;
+    border-block-end: 1px solid var(--rule);
+    font-size: 0.88rem;
   }
 
   th {
-    color: var(--subtext);
+    color: var(--mute);
     font-weight: 500;
-    font-size: 0.75rem;
-    letter-spacing: 0.06em;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
   }
 
   .pill {
     display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
-    background: var(--surface0);
-    font-size: 0.75rem;
+    padding: 0;
+    font-size: 0.82rem;
+    background: none;
   }
 
   .pill.running,
-  .pill.pending { color: var(--yellow); }
-  .pill.completed { color: var(--teal); }
+  .pill.pending { color: var(--warn); }
+  .pill.completed { color: var(--ok); }
   .pill.failed,
-  .pill.cancelled { color: var(--red); }
+  .pill.cancelled { color: var(--bad); }
 
   .toolbar {
     display: flex;
     gap: 0.6rem;
     flex-wrap: wrap;
-    margin-block-end: 1.1rem;
+    align-items: end;
+    margin-block-end: 1rem;
   }
 
   .gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(13.5rem, 100%), 1fr));
-    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
+    gap: 0.75rem;
   }
 
   .card {
-    background: var(--base);
-    border: 1px solid var(--surface0);
-    border-radius: 1rem;
-    overflow: hidden;
+    background: var(--sheet);
+    border: 1px solid var(--rule);
     cursor: pointer;
     position: relative;
     min-inline-size: 0;
@@ -465,15 +494,15 @@
   .card img {
     inline-size: 100%;
     aspect-ratio: 1;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
-    background: var(--mantle);
+    background: var(--paper);
   }
 
   .card .cap {
-    padding: 0.6rem 0.75rem 0.75rem;
-    color: var(--subtext);
-    font-size: 0.82rem;
+    padding: 0.55rem 0.7rem 0.7rem;
+    color: var(--mute);
+    font-size: 0.8rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -482,11 +511,11 @@
   .card .hover {
     position: absolute;
     inset: 0;
-    background: color-mix(in oklab, var(--crust) 82%, transparent);
-    color: var(--text);
-    padding: 1rem;
+    background: color-mix(in oklab, var(--paper) 88%, transparent);
+    color: var(--ink);
+    padding: 0.9rem;
     opacity: 0;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     overflow: auto;
   }
 
@@ -505,23 +534,22 @@
     display: flex;
     gap: 0.6rem;
     align-items: center;
-    margin-block-start: 1.3rem;
-    color: var(--subtext);
+    margin-block-start: 1.2rem;
+    color: var(--mute);
   }
 
   .lightbox {
     inset: 0;
     border: 0;
-    padding: 2rem;
+    padding: 1.5rem;
     max-inline-size: min(72rem, 96vw);
     max-block-size: 94dvh;
     inline-size: min(72rem, 96vw);
-    background: var(--mantle);
-    color: var(--text);
-    border-radius: 1.1rem;
+    background: var(--sheet);
+    color: var(--ink);
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
-    gap: 1.4rem;
+    gap: 1.25rem;
   }
 
   .lightbox:not([open]) {
@@ -529,7 +557,7 @@
   }
 
   .lightbox::backdrop {
-    background: rgb(17 17 27 / 0.78);
+    background: rgb(16 21 28 / 0.72);
   }
 
   .lightbox img {
@@ -537,118 +565,142 @@
     block-size: 100%;
     max-block-size: 82dvh;
     object-fit: contain;
-    background: var(--crust);
-    border-radius: 0.7rem;
+    background: var(--paper);
   }
 
   .meta h2 {
-    font-family: "Noto Serif SC", serif;
     margin-block-start: 0;
+    font-size: 1.15rem;
   }
 
-  .meta p { color: var(--subtext); }
+  .meta p { color: var(--mute); }
 
   .meta dl {
     display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr);
-    gap: 0.45rem 0.7rem;
-    font-size: 0.9rem;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.4rem 0.65rem;
+    font-size: 0.88rem;
   }
 
-  .meta dt { color: var(--subtext); }
+  .meta dt { color: var(--mute); }
 
-  .checks { display: grid; gap: 0.45rem; }
+  .checks { display: grid; gap: 0.2rem; }
 
   .check {
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    padding-block: 0.6rem;
-    border-block-end: 1px solid var(--surface0);
+    padding-block: 0.55rem;
+    border-block-end: 1px solid var(--rule);
   }
 
-  .ok { color: var(--teal); }
-  .bad { color: var(--red); }
-  .muted { color: var(--subtext); }
+  .ok { color: var(--ok); }
+  .bad { color: var(--bad); }
+  .muted { color: var(--mute); }
 
   .apply-line {
-    color: var(--subtext);
-    margin: 0.5rem 0 1rem;
+    color: var(--mute);
+    margin: 0.65rem 0 0.4rem;
     white-space: pre-wrap;
+    font-size: 0.82rem;
   }
 
-  .apply-line.bad { color: var(--red); }
-  .apply-line.ok { color: var(--teal); }
+  .apply-line.bad { color: var(--bad); }
+  .apply-line.ok { color: var(--ok); }
 
-  .forecast {
+  .meter {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
-    margin: 0.4rem 0 0.7rem;
+    gap: 0.85rem;
+    margin: 1.1rem 0 0.35rem;
   }
 
-  .forecast-card {
-    background: var(--mantle);
-    border: 1px solid var(--surface0);
-    border-radius: 0.85rem;
-    padding: 0.85rem 1rem;
+  .meter > div {
+    border-block-start: 2px solid var(--prussian);
+    padding-block-start: 0.45rem;
     min-inline-size: 0;
   }
 
-  .forecast-card h3 {
-    margin: 0 0 0.45rem;
-    font-size: 0.82rem;
-    color: var(--subtext);
-    font-weight: 500;
+  .meter span {
+    display: block;
+    color: var(--mute);
+    font-size: 0.72rem;
+    margin-block-end: 0.25rem;
   }
 
-  .forecast-card .mono {
+  .meter .mono {
     white-space: pre-wrap;
-    line-height: 1.55;
+    line-height: 1.45;
+    font-size: 0.8rem;
   }
 
   .snapshots {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.6rem;
-    margin-block-end: 1rem;
+    gap: 0.55rem;
+    margin-block-end: 0.85rem;
   }
 
   .snap {
-    background: var(--mantle);
-    border-radius: 0.75rem;
-    padding: 0.75rem;
+    background: var(--paper);
+    padding: 0.7rem;
     display: grid;
-    gap: 0.2rem;
+    gap: 0.15rem;
     min-inline-size: 0;
   }
 
   .snap span,
   .snap small {
-    color: var(--subtext);
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
+    color: var(--mute);
+    font-size: 0.7rem;
   }
 
   a {
-    color: var(--mauve);
+    color: var(--prussian);
     text-decoration: none;
   }
 
   a:hover { text-decoration: underline; }
 
-  .timeline { display: grid; gap: 0.35rem; }
+  .timeline { display: grid; gap: 0.3rem; }
 
   .span {
     display: grid;
     grid-template-columns: minmax(9rem, 1.2fr) 5rem 4.5rem 8rem minmax(0, 1fr);
-    gap: 0.6rem;
+    gap: 0.55rem;
     align-items: center;
-    padding-block: 0.45rem;
-    border-block-end: 1px solid var(--surface0);
-    font-size: 0.82rem;
+    padding-block: 0.4rem;
+    border-block-end: 1px solid var(--rule);
+    font-size: 0.8rem;
     min-inline-size: 0;
   }
 
   .span > * { min-inline-size: 0; }
+
+  @media (max-width: 64rem) {
+    .dials {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 52rem) {
+    .dials,
+    .meter,
+    .snapshots,
+    .grid {
+      grid-template-columns: 1fr;
+    }
+
+    .lightbox {
+      grid-template-columns: 1fr;
+      padding: 1rem;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .span {
+      grid-template-columns: 1fr;
+      gap: 0.15rem;
+    }
+  }
 }

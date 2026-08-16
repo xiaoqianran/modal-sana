@@ -69,6 +69,7 @@ def test_meta_and_health(monkeypatch) -> None:
     fourk = next(model for model in meta["models"] if model["id"] == "sana-1.6b-4k")
     assert fourk["native_width"] == 4096
     assert fourk["vae_tiling"] is True
+    assert fourk["recommended_gpu"] == "RTX-PRO-6000"
     assert any(gpu["id"] == "L40S" for gpu in meta["gpus"])
     assert any(gpu["id"] == "H100" and gpu["usd_per_second"] > 0 for gpu in meta["gpus"])
     assert meta["runtime"]["would_use"] == "deployed"
