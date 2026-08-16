@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from modal_sana.core.cost import cost_for_seconds, format_usd, item_gpu_seconds
 from modal_sana.modal.gpu import estimate_cost_usd
+from modal_sana.modal.worker import SCALEDOWN_SECONDS
 
 
 def test_item_gpu_seconds_cold_vs_warm() -> None:
@@ -42,3 +43,7 @@ def test_l40s_list_price() -> None:
     text = format_usd(0.00542)
     assert "$0.005420" in text
     assert "¢" in text
+
+
+def test_scaledown_is_ten_seconds() -> None:
+    assert SCALEDOWN_SECONDS == 10

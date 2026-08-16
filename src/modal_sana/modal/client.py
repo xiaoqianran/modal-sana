@@ -30,7 +30,7 @@ class ModalSanaGenerator:
 
         from modal_sana.modal.app import app
         from modal_sana.modal.gpu import get_gpu
-        from modal_sana.modal.worker import SanaWorker
+        from modal_sana.modal.worker import SCALEDOWN_SECONDS, SanaWorker
 
         spec = get_gpu(gpu)
         payloads = [{"items": [item.model_dump() for item in batch]} for batch in batches]
@@ -45,6 +45,7 @@ class ModalSanaGenerator:
         options: dict[str, Any] = {
             "gpu": spec.modal_name,
             "max_containers": max(workers, 1),
+            "scaledown_window": SCALEDOWN_SECONDS,
             "retries": modal.Retries(max_retries=max(retry, 0), backoff_coefficient=2.0),
         }
         if secrets:

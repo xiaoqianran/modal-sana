@@ -11,6 +11,8 @@ from modal_sana.modal.volumes import CACHE_DIR, huggingface_cache_volume
 from modal_sana.models.sana.registry import get_model
 
 MINUTES = 60
+# Modal allows 2s–20min. Idle GPU+CPU of this container are billed until then.
+SCALEDOWN_SECONDS = 10
 
 
 def _dtype(name: str):
@@ -51,7 +53,7 @@ def _encode(image, image_format: str, quality: int) -> bytes:
     image=image,
     gpu="L40S",
     timeout=15 * MINUTES,
-    scaledown_window=5 * MINUTES,
+    scaledown_window=SCALEDOWN_SECONDS,
     volumes={CACHE_DIR: huggingface_cache_volume()},
     retries=modal.Retries(max_retries=2, backoff_coefficient=2.0),
 )
@@ -60,6 +62,8 @@ class SanaWorker:
 
     GPU type and max_containers are applied at the call site with
     `SanaWorker.with_options(gpu=..., max_containers=...)`.
+    After the last input, Modal may keep this container (GPU + its CPU)
+    idle for ``SCALEDOWN_SECONDS`` then scale to zero.
     """
 
     model_id: str = modal.parameter(default="sana-sprint-1.6b")
