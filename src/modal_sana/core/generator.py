@@ -48,7 +48,7 @@ class ImageGenerator(Protocol):
 
 class GeneratorOptions(BaseModel):
     gpu: str = "L40S"
-    workers: int = 2
+    workers: int = 1
     model: str = "sana-sprint-1.6b"
     retry: int = 2
     deployed: bool | None = None

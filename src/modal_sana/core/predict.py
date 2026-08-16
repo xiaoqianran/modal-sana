@@ -51,7 +51,7 @@ def predict_run(
     height: int = 1024,
     steps: int | None = None,
     batch_size: int = 4,
-    workers: int = 2,
+    workers: int = 1,
     history: list[CostEvent] | None = None,
 ) -> dict[str, Any]:
     """Estimate Modal GPU $ for one generate click (cold load + N images)."""

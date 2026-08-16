@@ -46,7 +46,7 @@ function defaultsFrom(meta) {
     guidance: "",
     seed: "",
     batch_size: model?.recommended_batch || 4,
-    workers: 2,
+    workers: meta?.defaults?.workers || 1,
     format: meta?.defaults?.image_format || "png",
     dry_run: false,
     prefer_deployed: meta?.defaults?.prefer_deployed !== false,
@@ -108,7 +108,7 @@ function settingsGrid(d, meta) {
         ${field("guidance", "引导系数", d.guidance)}
         ${field("seed", "种子", d.seed)}
         ${field("batch_size", "GPU 批大小", d.batch_size, "number")}
-        ${field("workers", "并行容器", d.workers, "number")}
+        ${field("workers", "并行容器（1=只用一台 GPU）", d.workers, "number")}
         ${select("image_format", "格式", ["png", "jpg", "webp"], d.format)}
       </div>
       ${field("dry_run", "空跑（不调用 Modal / GPU）", d.dry_run, "checkbox")}
@@ -133,7 +133,7 @@ function formPayload(form) {
     guidance: num("guidance"),
     seed: num("seed"),
     batch_size: Number(data.get("batch_size") || 4),
-    workers: Number(data.get("workers") || 2),
+    workers: Number(data.get("workers") || 1),
     image_format: data.get("image_format") || "png",
     dry_run: data.get("dry_run") === "on",
     prefer_deployed: data.get("prefer_deployed") === "on",
@@ -439,7 +439,7 @@ async function refreshForecast(form, page = 1) {
     width: String(payload.width || 1024),
     height: String(payload.height || 1024),
     batch_size: String(payload.batch_size || 4),
-    workers: String(payload.workers || 2),
+    workers: String(payload.workers || 1),
     period,
     page: String(page || 1),
     per_page: "15",

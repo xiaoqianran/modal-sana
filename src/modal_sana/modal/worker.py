@@ -407,6 +407,7 @@ def _publish_cost_events(
                 "load_ms": 0.0,
                 "infer_ms": infer_ms,
                 "encode_ms": encode_ms,
+                "vram_allocated_mb": row.get("vram_allocated_mb"),
                 "width": row.get("width") or item.get("width"),
                 "height": row.get("height") or item.get("height"),
                 "steps": item.get("steps"),
