@@ -1,0 +1,4 @@
+{"id":"forest","prompt":"a beautiful forest at dawn, cinematic light through the trees"}
+{"id":"city","prompt":"a futuristic city in the rain, neon reflections on wet streets","count":4}
+{"id":"cat","prompt":"a white cat sitting beside a window, soft morning light","seed":12345,"count":2}
+{"id":"tokyo","prompt":"an astronaut walking through Tokyo at night","width":1024,"height":1024,"steps":2}
