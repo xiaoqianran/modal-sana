@@ -209,13 +209,7 @@ class JobService:
     def get_job_detail(self, job_id: str) -> dict[str, Any]:
         summary = self.get_job(job_id)
         with self.db.session() as session:
-            generations = list(
-                session.exec(select(GenerationRow).where(GenerationRow.job_id == job_id))
-            )
-            images = list(session.exec(select(ImageRow).where(ImageRow.job_id == job_id)))
-        return {
-            "job": summary.model_dump(mode="json"),
-            "generations": [
+            generations = [
                 {
                     "id": item.id,
                     "prompt": item.prompt,
@@ -224,8 +218,12 @@ class JobService:
                     "error": item.error,
                     "latency_ms": item.latency_ms,
                 }
-                for item in generations
-            ],
+                for item in session.exec(select(GenerationRow).where(GenerationRow.job_id == job_id))
+            ]
+            images = list(session.exec(select(ImageRow).where(ImageRow.job_id == job_id)))
+        return {
+            "job": summary.model_dump(mode="json"),
+            "generations": generations,
             "images": len(images),
         }
 
@@ -269,7 +267,10 @@ class JobService:
             total = len(rows)
             start = (page - 1) * per_page
             sliced = rows[start : start + per_page]
-            items = [_image_record(image, generation) for image, generation in sliced]
+            items = [
+                _image_record(image, generation)
+                for image, generation in sliced
+            ]
         return GalleryPage(items=items, total=total, page=page, per_page=per_page)
 
     def get_image(self, image_id: str) -> ImageRecord:

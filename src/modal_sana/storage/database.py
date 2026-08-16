@@ -123,7 +123,7 @@ class Database:
     @contextmanager
     def session(self) -> Iterator[Session]:
         with self._lock:
-            with Session(self.engine) as session:
+            with Session(self.engine, expire_on_commit=False) as session:
                 yield session
                 session.commit()
 
