@@ -20,10 +20,17 @@ def ensure_local_app_objects() -> None:
     ``Function has not been hydrated``.
     """
     from modal_sana.modal.ledger import archive_cost_events, list_cost_events
-    from modal_sana.modal.prefetch import list_volume_models, prefetch_model
+    from modal_sana.modal.prefetch import list_volume_models, prefetch_model, registered_model_ids
     from modal_sana.modal.worker import SanaWorker
 
-    _ = (SanaWorker, prefetch_model, list_volume_models, archive_cost_events, list_cost_events)
+    _ = (
+        SanaWorker,
+        prefetch_model,
+        list_volume_models,
+        registered_model_ids,
+        archive_cost_events,
+        list_cost_events,
+    )
 
 
 def build_worker_options(
@@ -86,7 +93,12 @@ class ModalSanaGenerator:
             return
 
         secrets = modal_download_secrets()
-        decision = ensure_deployed_or_fallback(deployed)
+        needed = [model]
+        for batch in batches:
+            for request in batch:
+                if request.model and request.model not in needed:
+                    needed.append(request.model)
+        decision = ensure_deployed_or_fallback(deployed, required_models=needed)
         use_deployed = decision.use_deployed
         print(
             f"modal-sana: Modal path={decision.mode} ({decision.reason}) "

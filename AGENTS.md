@@ -23,8 +23,8 @@ Local CLI/Web own jobs, prompts, SQLite metadata, and the gallery. Modal owns GP
 
 - Fan-out: `SanaWorker.generate_batch.map(..., order_outputs=False, return_exceptions=True)`
 - GPU / concurrency: `with_options(gpu=..., max_containers=...)`
-- Warm weights: CPU `prefetch_model` writes `/cache/models/{id}` on Volume and `commit()`s; GPU `@enter` only `from_pretrained(..., local_files_only=True)`. `modal-sana prefetch` with no args downloads every model (aria2c / `hf` CLI / snapshot). Tokens: `HF_TOKEN`, `CIVITAI_TOKEN`, `GITHUB_TOKEN`.
-- Deploy: Generate/prefetch look up `SanaWorker`; if missing they call `app.deploy()` (same as `modal deploy -m modal_sana.modal.worker`). Ephemeral `app.run()` only when the workspace deploy quota is full *and* this app is not deployed, or the user passed `--ephemeral`. Local web/CLI are **not** `modal serve`.
+- Warm weights: CPU `prefetch_model` writes `/cache/models/{id}` on Volume and `commit()`s; GPU `@enter` only `from_pretrained(..., local_files_only=True)`. `modal-sana prefetch` downloads the base 1024px set; `--all` includes 2K/4K. Tokens: `HF_TOKEN`, `CIVITAI_TOKEN`, `GITHUB_TOKEN`.
+- Deploy: Generate/prefetch look up `SanaWorker`; if missing they call `app.deploy()` (same as `modal deploy -m modal_sana.modal.worker`). If the deployed image is missing a model the local checkout wants (e.g. 2K/4K after an upgrade), they redeploy the same app. Ephemeral `app.run()` only when the workspace deploy quota is full *and* this app is not deployed, or the user passed `--ephemeral`. Local web/CLI are **not** `modal serve`.
 
 `SanaWorker` must **not** use `from __future__ import annotations` — `modal.parameter()` needs real types.
 

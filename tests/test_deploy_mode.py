@@ -10,7 +10,9 @@ from modal_sana.modal.deploy_mode import (
     ensure_deployed_or_fallback,
     inspect_deploy_target,
     is_deploy_quota_exhausted,
+    is_unknown_model_error,
     missing_app_message,
+    missing_deployed_models,
     resolve_deploy_mode,
 )
 from modal_sana.schemas.job import JobConfig, PromptSpec
@@ -89,6 +91,107 @@ def test_ensure_other_deploy_error_raises(monkeypatch) -> None:
     monkeypatch.setattr("modal_sana.modal.deploy_mode.deploy_local_app", fail)
     with pytest.raises(DeployedAppMissing, match=DEPLOY_COMMAND):
         ensure_deployed_or_fallback(None)
+
+
+def test_ensure_redeploys_when_registry_missing_models(monkeypatch) -> None:
+    monkeypatch.delenv("MODAL_SANA_EPHEMERAL", raising=False)
+    seen = {"deploy": 0}
+
+    def lookup(app_name=None):
+        return True, None
+
+    def deploy(app_name=None):
+        seen["deploy"] += 1
+        return {"app_name": app_name or "modal-sana"}
+
+    monkeypatch.setattr("modal_sana.modal.deploy_mode.deployed_app_available", lookup)
+    monkeypatch.setattr("modal_sana.modal.deploy_mode.deploy_local_app", deploy)
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_registry_ids",
+        lambda app_name=None: {
+            "sana-sprint-1.6b",
+            "sana-sprint-0.6b",
+            "sana-1.6b",
+            "sana-1.5-1.6b",
+            "sana-1.5-4.8b",
+        },
+    )
+    decision = ensure_deployed_or_fallback(
+        None,
+        required_models=["sana-sprint-1.6b", "sana-1.6b-2k", "sana-1.6b-4k"],
+    )
+    assert seen["deploy"] == 1
+    assert decision.reason == "auto-redeployed"
+    assert decision.use_deployed is True
+
+
+def test_ensure_does_not_redeploy_when_registry_is_current(monkeypatch) -> None:
+    monkeypatch.delenv("MODAL_SANA_EPHEMERAL", raising=False)
+
+    def boom(app_name=None):
+        raise AssertionError("must not redeploy when remote already knows the models")
+
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_app_available",
+        lambda app_name=None: (True, None),
+    )
+    monkeypatch.setattr("modal_sana.modal.deploy_mode.deploy_local_app", boom)
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_registry_ids",
+        lambda app_name=None: {"sana-sprint-1.6b", "sana-1.6b-4k"},
+    )
+    decision = ensure_deployed_or_fallback(None, required_models=["sana-1.6b-4k"])
+    assert decision.reason == "auto-found"
+
+
+def test_missing_deployed_models_preserves_order(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_registry_ids",
+        lambda app_name=None: {"sana-sprint-1.6b", "sana-1.5-1.6b"},
+    )
+    assert missing_deployed_models(
+        "modal-sana",
+        ["sana-1.6b-2k", "sana-sprint-1.6b", "sana-1.6b-4k"],
+    ) == ["sana-1.6b-2k", "sana-1.6b-4k"]
+    assert missing_deployed_models("modal-sana", ["sana-sprint-1.6b"]) == []
+    assert missing_deployed_models("modal-sana", []) == []
+
+
+def test_missing_models_empty_when_registry_unreadable(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_registry_ids",
+        lambda app_name=None: None,
+    )
+    assert missing_deployed_models("modal-sana", ["sana-1.6b-4k"]) == []
+
+
+def test_ensure_skips_redeploy_when_registry_unreadable(monkeypatch) -> None:
+    monkeypatch.delenv("MODAL_SANA_EPHEMERAL", raising=False)
+
+    def boom(app_name=None):
+        raise AssertionError("unreadable registry must not force a redeploy")
+
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_app_available",
+        lambda app_name=None: (True, None),
+    )
+    monkeypatch.setattr("modal_sana.modal.deploy_mode.deploy_local_app", boom)
+    monkeypatch.setattr(
+        "modal_sana.modal.deploy_mode.deployed_registry_ids",
+        lambda app_name=None: None,
+    )
+    decision = ensure_deployed_or_fallback(None, required_models=["sana-1.6b-4k"])
+    assert decision.reason == "auto-found"
+
+
+def test_unknown_model_error_detector() -> None:
+    assert is_unknown_model_error(
+        ValueError(
+            "Unknown model 'sana-1.6b-2k'. Known: sana-sprint-1.6b, "
+            "sana-sprint-0.6b, sana-1.6b, sana-1.5-1.6b, sana-1.5-4.8b"
+        )
+    )
+    assert not is_unknown_model_error(RuntimeError("volume commit failed"))
 
 
 def test_ensure_forced_ephemeral_does_not_deploy(monkeypatch) -> None:

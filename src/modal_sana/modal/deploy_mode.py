@@ -16,6 +16,7 @@ DeployReason = Literal[
     "env-ephemeral",
     "auto-found",
     "auto-deployed",
+    "auto-redeployed",
     "quota-ephemeral",
 ]
 DeployPath = Literal["deployed", "ephemeral"]
@@ -24,7 +25,7 @@ DEPLOY_COMMAND = "uv run modal deploy -m modal_sana.modal.worker"
 WORKER_CLASS = "SanaWorker"
 DEFAULT_APP_NAME = "modal-sana"
 
-_deploy_lock = threading.Lock()
+_deploy_lock = threading.RLock()
 
 
 class DeployedAppMissing(RuntimeError):
@@ -57,6 +58,46 @@ def deployed_app_available(app_name: str | None = None) -> tuple[bool, str | Non
         return False, str(exc)
     except Exception as exc:  # noqa: BLE001
         return False, f"{type(exc).__name__}: {exc}"
+
+
+def is_unknown_model_error(exc: BaseException) -> bool:
+    """Remote prefetch/worker still running an older registry."""
+    return "unknown model" in str(exc).lower()
+
+
+def deployed_registry_ids(app_name: str | None = None) -> set[str] | None:
+    """Model ids the deployed image knows. None if we cannot ask."""
+    import modal
+    from modal.exception import NotFoundError
+
+    name = app_name or deployed_app_name()
+    try:
+        ids = modal.Function.from_name(name, "registered_model_ids").remote()
+        return {str(item) for item in (ids or [])}
+    except (NotFoundError, AttributeError):
+        pass
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        rows = modal.Function.from_name(name, "list_volume_models").remote()
+    except Exception:  # noqa: BLE001
+        return None
+    known: set[str] = set()
+    for row in rows or []:
+        if isinstance(row, dict) and row.get("model_id"):
+            known.add(str(row["model_id"]))
+    return known
+
+
+def missing_deployed_models(app_name: str, required: list[str]) -> list[str]:
+    """Ids the local CLI wants that the deployed image does not register."""
+    needed = [item for item in required if item]
+    if not needed:
+        return []
+    known = deployed_registry_ids(app_name)
+    if known is None:
+        return []
+    return [model_id for model_id in needed if model_id not in known]
 
 
 def is_deploy_quota_exhausted(exc: BaseException) -> bool:
@@ -152,8 +193,16 @@ def resolve_deploy_mode(requested: bool | None = None) -> DeployDecision:
     return DeployDecision(True, "default-deployed", name)
 
 
-def ensure_deployed_or_fallback(requested: bool | None = None) -> DeployDecision:
+def ensure_deployed_or_fallback(
+    requested: bool | None = None,
+    *,
+    required_models: list[str] | None = None,
+) -> DeployDecision:
     """Find SanaWorker, otherwise deploy it.
+
+    If the deployed image is missing any ``required_models`` (for example
+    ``prefetch --all`` asking for 2K/4K after a local upgrade), redeploy
+    the same app name so the remote registry matches this checkout.
 
     Ephemeral ``app.run()`` only if the workspace deploy quota is full
     *and* this app is still not deployed.
@@ -164,17 +213,26 @@ def ensure_deployed_or_fallback(requested: bool | None = None) -> DeployDecision
     name = intent.app_name
     available, error = deployed_app_available(name)
     if available:
-        return DeployDecision(True, "auto-found", name, available=True)
+        return _redeploy_if_registry_stale(
+            DeployDecision(True, "auto-found", name, available=True),
+            required_models,
+        )
     with _deploy_lock:
         available, error = deployed_app_available(name)
         if available:
-            return DeployDecision(True, "auto-found", name, available=True)
+            return _redeploy_if_registry_stale(
+                DeployDecision(True, "auto-found", name, available=True),
+                required_models,
+            )
         try:
             deploy_local_app(name)
         except Exception as exc:  # noqa: BLE001
             still, still_err = deployed_app_available(name)
             if still:
-                return DeployDecision(True, "auto-found", name, available=True)
+                return _redeploy_if_registry_stale(
+                    DeployDecision(True, "auto-found", name, available=True),
+                    required_models,
+                )
             if is_deploy_quota_exhausted(exc):
                 print(
                     f"modal-sana: deploy quota full and '{name}' is not deployed; "
@@ -191,6 +249,39 @@ def ensure_deployed_or_fallback(requested: bool | None = None) -> DeployDecision
             raise DeployedAppMissing(missing_app_message(name, str(exc))) from exc
         available, error = deployed_app_available(name)
         return DeployDecision(True, "auto-deployed", name, available=available, error=error)
+
+
+def _redeploy_if_registry_stale(
+    decision: DeployDecision,
+    required_models: list[str] | None,
+) -> DeployDecision:
+    if not decision.use_deployed or not required_models:
+        return decision
+    missing = missing_deployed_models(decision.app_name, required_models)
+    if not missing:
+        return decision
+    with _deploy_lock:
+        missing = missing_deployed_models(decision.app_name, required_models)
+        if not missing:
+            return decision
+        print(
+            "modal-sana: deployed app is missing "
+            f"{', '.join(missing)}; redeploying so the remote registry matches "
+            "this checkout (same as modal deploy)",
+            flush=True,
+        )
+        try:
+            deploy_local_app(decision.app_name)
+        except Exception as exc:  # noqa: BLE001
+            raise DeployedAppMissing(
+                missing_app_message(decision.app_name, str(exc))
+            ) from exc
+        return DeployDecision(
+            True,
+            "auto-redeployed",
+            decision.app_name,
+            available=True,
+        )
 
 
 def inspect_deploy_target() -> dict[str, Any]:

@@ -35,4 +35,5 @@ def test_ensure_app_registers_prefetch_and_worker() -> None:
     ensure_local_app_objects()
     assert "prefetch_model" in app.registered_functions
     assert "list_volume_models" in app.registered_functions
+    assert "registered_model_ids" in app.registered_functions
     assert "SanaWorker" in app.registered_classes
