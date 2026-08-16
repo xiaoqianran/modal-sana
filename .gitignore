@@ -22,6 +22,8 @@ data/*
 
 outputs/
 .modal/
+.codegraph/
+.agents/
 
 .DS_Store
 .idea/
