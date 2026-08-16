@@ -14,7 +14,7 @@ def test_index_is_chinese_semantic_shell() -> None:
     assert "<header" in html
     assert 'href="#main"' in html
     assert "<dialog" in html
-    assert "Noto+Sans+SC" in html
+    assert "fonts.googleapis.com" not in html
     assert "Noto+Serif+SC" not in html
 
 
@@ -28,6 +28,14 @@ def test_styles_are_viewing_booth() -> None:
     assert "prefers-reduced-motion" in css
     assert "#1e1e2e" not in css
     assert "#cba6f7" not in css
+    assert "Microsoft YaHei" in css
+    assert "letter-spacing: -0.04em" not in css
+    assert 'font-feature-settings: "ss06"' not in css
+    assert ".table-wrap" in css
+    assert "input:not([type=\"checkbox\"]" in css or "input:not([type=checkbox]" in css
+    assert ".event-head" in css
+    assert ".cap-prompt" in css
+    assert ".lightbox-stage" in css
 
 
 def test_static_files_are_served() -> None:
@@ -65,6 +73,11 @@ def test_cost_page_is_first_class() -> None:
     assert "include_ledger: \"false\"" in js
     assert "renderChain" in js
     assert "#/cost" in js
+    assert "event-head" in js
+    assert "function shortId" in js
+    assert "cap-prompt" in js
+    assert "lightbox-stage" in js
+    assert "tableWrap" in js
 
 
 def test_workers_default_is_one_gpu() -> None:
