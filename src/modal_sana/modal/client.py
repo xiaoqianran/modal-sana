@@ -11,6 +11,21 @@ from modal_sana.core.generator import GenerateRequest, GenerateResult
 from modal_sana.modal.links import app_run_url
 
 
+def ensure_local_app_objects() -> None:
+    """Register every App function/class before ``app.run()`` hydrates.
+
+    Importing only ``modal.ledger`` (the web cost API) registers
+    ``archive_cost_events`` / ``list_cost_events``. An ephemeral run then
+    hydrates just those two; ``prefetch_model.remote()`` raises
+    ``Function has not been hydrated``.
+    """
+    from modal_sana.modal.ledger import archive_cost_events, list_cost_events
+    from modal_sana.modal.prefetch import list_volume_models, prefetch_model
+    from modal_sana.modal.worker import SanaWorker
+
+    _ = (SanaWorker, prefetch_model, list_volume_models, archive_cost_events, list_cost_events)
+
+
 def build_worker_options(
     *,
     gpu: str,
@@ -63,6 +78,7 @@ class ModalSanaGenerator:
         from modal_sana.modal.gpu import get_gpu
         from modal_sana.modal.secrets import modal_download_secrets
 
+        ensure_local_app_objects()
         spec = get_gpu(gpu)
         payloads = [_annotate_payload(batch, gpu=spec.id, model=model) for batch in batches]
         if not payloads:

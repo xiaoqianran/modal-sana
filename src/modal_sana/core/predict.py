@@ -125,7 +125,10 @@ def predict_run(
             "per_container_ms": load_ms,
             "containers": containers,
             "source": load_src,
-            "note": "Cold from_pretrained + pipe.to(cuda). One charge per new GPU container.",
+            "note": (
+                "First deployed boot after a new model/GPU: from_pretrained on CPU + to(cuda). "
+                "Later cold starts restore a CPU memory snapshot and usually only pay to(cuda)."
+            ),
         },
         "generate": {
             "label": "GPU 实际生成",

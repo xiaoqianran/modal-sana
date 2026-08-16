@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from modal_sana.core.cost import cost_for_seconds, format_usd, item_gpu_seconds
 from modal_sana.modal.gpu import estimate_cost_usd
-from modal_sana.modal.worker import SCALEDOWN_SECONDS
+from modal_sana.modal.worker import (
+    MEMORY_SNAPSHOT,
+    SCALEDOWN_SECONDS,
+    SanaWorker,
+    detect_snapshot_restore,
+)
 
 
 def test_item_gpu_seconds_cold_vs_warm() -> None:
@@ -47,3 +52,15 @@ def test_l40s_list_price() -> None:
 
 def test_scaledown_is_ten_seconds() -> None:
     assert SCALEDOWN_SECONDS == 10
+
+
+def test_cpu_memory_snapshot_is_enabled() -> None:
+    assert MEMORY_SNAPSHOT is True
+    assert hasattr(SanaWorker, "load_cpu")
+    assert hasattr(SanaWorker, "load_gpu")
+
+
+def test_detect_snapshot_restore_uses_monotonic_reset() -> None:
+    assert detect_snapshot_restore(120.0, 0.4) is True
+    assert detect_snapshot_restore(10.0, 28.0) is False
+    assert detect_snapshot_restore(None, 1.0) is True
