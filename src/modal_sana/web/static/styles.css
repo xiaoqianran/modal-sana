@@ -7,6 +7,12 @@
     box-sizing: border-box;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    hanging-punctuation: none;
+  }
+
   html,
   body {
     margin: 0;
@@ -55,19 +61,23 @@
   :root {
     color-scheme: light;
     accent-color: var(--prussian);
-    font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", sans-serif;
-    font-feature-settings: "ss06";
+    --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+    --font-mono: "Cascadia Mono", "Sarasa Mono SC", "IBM Plex Mono", ui-monospace,
+      "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--font-sans);
+    font-synthesis: none;
     --paper: #e8edf2;
     --sheet: #f7f9fb;
-    --ink: #1c2430;
-    --mute: #5c6778;
+    --ink: #141a22;
+    --mute: #3a4554;
     --rule: #c5ced8;
     --prussian: #215a78;
     --copper: #b56a3a;
-    --ok: #2f7d5b;
-    --bad: #c45c4a;
-    --warn: #9a6b24;
-    --shadow: 0 0.75rem 1.75rem rgb(28 36 48 / 0.08);
+    --ok: #1f6b4c;
+    --bad: #b44538;
+    --warn: #8a5a16;
+    --shadow: 0 0.75rem 1.75rem rgb(20 26 34 / 0.08);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -76,7 +86,7 @@
       --paper: #10151c;
       --sheet: #171e27;
       --ink: #e6edf4;
-      --mute: #93a0b0;
+      --mute: #b4c0ce;
       --rule: #2c3642;
       --prussian: #7eb6d4;
       --copper: #d4895a;
@@ -84,6 +94,8 @@
       --bad: #e07a6a;
       --warn: #e0b36a;
       --shadow: 0 0.75rem 1.75rem rgb(0 0 0 / 0.35);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
   }
 }
@@ -92,7 +104,7 @@
   body {
     background: var(--paper);
     color: var(--ink);
-    line-height: 1.5;
+    line-height: 1.65;
   }
 
   .skip {
@@ -101,7 +113,7 @@
     inset-block-start: 0.75rem;
     transform: translateY(-200%);
     background: var(--prussian);
-    color: var(--sheet);
+    color: #fff;
     padding: 0.5rem 0.85rem;
     z-index: 8;
   }
@@ -111,11 +123,11 @@
   }
 
   .mast {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 1rem 1.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1.1rem;
     align-items: center;
-    padding: 1rem clamp(1.1rem, 3vw, 2.25rem);
+    padding: 0.7rem clamp(0.9rem, 2.4vw, 1.8rem);
     border-block-end: 1px solid var(--rule);
     background: var(--sheet);
     position: sticky;
@@ -126,11 +138,11 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.65rem;
     color: var(--ink);
     text-decoration: none;
     font-weight: 700;
-    letter-spacing: -0.03em;
+    flex: none;
   }
 
   .brand:hover {
@@ -139,30 +151,38 @@
   }
 
   .mark {
-    inline-size: 1.4rem;
-    block-size: 1.4rem;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
     background: var(--prussian);
-    box-shadow: inset -0.85rem 0 0 var(--copper);
+    box-shadow: inset -0.75rem 0 0 var(--copper);
     flex: none;
   }
 
   .brand-name {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
     font-weight: 500;
+    letter-spacing: 0;
   }
 
   nav {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.2rem;
+    flex: 1 1 18rem;
+    min-inline-size: 0;
+    gap: 0.15rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
   }
 
   nav a {
     color: var(--mute);
     text-decoration: none;
-    padding: 0.45rem 0.8rem;
-    font-size: 0.95rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    white-space: nowrap;
+    flex: none;
   }
 
   nav a:hover,
@@ -172,73 +192,78 @@
   }
 
   nav a[aria-current="page"] {
-    box-shadow: inset 0 -0.12rem 0 var(--prussian);
+    box-shadow: inset 0 -0.16rem 0 var(--prussian);
   }
 
   .mast-status {
     margin: 0;
     color: var(--mute);
-    font-size: 0.75rem;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    text-align: end;
+    font-size: 0.8125rem;
+    font-family: var(--font-mono);
+    line-height: 1.4;
+    flex: none;
     max-inline-size: 22rem;
   }
 
   main {
-    padding: 2.1rem clamp(1rem, 4vw, 2.75rem) 4.5rem;
-    max-inline-size: 64rem;
+    padding: 1.6rem clamp(0.9rem, 3vw, 2.4rem) 4.5rem;
+    max-inline-size: 68rem;
     min-inline-size: 0;
     margin-inline: auto;
   }
 
-  @media (max-width: 52rem) {
-    .mast {
-      grid-template-columns: 1fr;
-      align-items: start;
-    }
+  main.is-wide {
+    max-inline-size: 88rem;
+  }
 
+  @media (max-width: 40rem) {
     .mast-status {
-      text-align: start;
       max-inline-size: none;
+      flex: 1 1 100%;
     }
   }
 }
 
 @layer components {
   h1 {
-    font-size: clamp(1.7rem, 1.25rem + 1.3vw, 2.2rem);
+    font-size: clamp(1.55rem, 1.2rem + 1vw, 1.95rem);
     font-weight: 700;
-    margin: 0 0 0.4rem;
-    letter-spacing: -0.04em;
+    margin: 0 0 0.35rem;
+    letter-spacing: 0;
+    line-height: 1.3;
   }
 
   h2.section,
   h3.section {
-    font-weight: 600;
+    font-weight: 650;
     margin: 1.5rem 0 0.65rem;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
+    line-height: 1.35;
   }
 
-  h2.section { font-size: 1.1rem; }
-  h3.section { font-size: 0.98rem; }
+  h2.section { font-size: 1.125rem; }
+  h3.section { font-size: 1rem; }
 
   .lede {
     color: var(--mute);
-    margin: 0 0 1.25rem;
-    max-inline-size: 40rem;
+    margin: 0 0 1.15rem;
+    max-inline-size: 44rem;
+    font-size: 0.9375rem;
   }
 
   .lede code,
   .mono {
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 0.92em;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
   }
 
   .sheet,
   .panel {
     background: var(--sheet);
     border: 1px solid var(--rule);
-    padding: 1.5rem 1.55rem 1.6rem;
+    padding: 1.35rem 1.4rem 1.45rem;
     box-shadow: var(--shadow);
   }
 
@@ -258,39 +283,67 @@
     padding: 0;
     margin-block-end: 0.55rem;
     color: var(--mute);
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
+    font-size: 0.8125rem;
+    font-weight: 600;
   }
 
-  .dials {
+  .dials,
+  .grid {
     display: grid;
-    grid-template-columns: minmax(11rem, 1.5fr) minmax(11rem, 1.5fr) 5.75rem 6.75rem;
-    gap: 1rem 1.1rem;
+    grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+    gap: 0.9rem 1rem;
   }
 
   .field {
     min-inline-size: 0;
   }
 
-  .field label,
-  label:not(.check) {
+  .field > label,
+  .sheet > label,
+  label:not(.check, .field) {
     display: block;
     color: var(--mute);
-    font-size: 0.75rem;
-    margin-block-end: 0.3rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin-block-end: 0.35rem;
+    line-height: 1.4;
   }
 
   textarea,
-  input,
+  input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"]),
   select {
     inline-size: 100%;
     background: var(--paper);
     color: var(--ink);
     border: 1px solid var(--rule);
     border-radius: 0;
-    padding: 0.7rem 0.8rem;
+    padding: 0.65rem 0.8rem;
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.45;
+    min-block-size: 2.7rem;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+    min-block-size: 0;
+    padding: 0;
+    margin: 0;
+    flex: none;
+    accent-color: var(--prussian);
+  }
+
+  input[type="file"] {
+    inline-size: min(100%, 28rem);
+    max-inline-size: 100%;
+    min-block-size: 0;
+    padding: 0.35rem 0;
+    background: transparent;
+    border: 0;
+    color: var(--ink);
     font: inherit;
-    min-block-size: 2.65rem;
   }
 
   select {
@@ -299,38 +352,25 @@
       linear-gradient(45deg, transparent 50%, var(--mute) 50%),
       linear-gradient(135deg, var(--mute) 50%, transparent 50%);
     background-position:
-      calc(100% - 1.05rem) calc(50% - 0.15rem),
-      calc(100% - 0.7rem) calc(50% - 0.15rem);
-    background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+      calc(100% - 1.15rem) calc(50% - 0.16rem),
+      calc(100% - 0.78rem) calc(50% - 0.16rem);
+    background-size: 0.36rem 0.36rem, 0.36rem 0.36rem;
     background-repeat: no-repeat;
-    padding-inline-end: 1.8rem;
+    padding-inline-end: 2.2rem;
   }
 
   textarea {
-    min-block-size: 13.5rem;
+    min-block-size: 12.5rem;
     resize: vertical;
-    font-size: 1.06rem;
-    line-height: 1.7;
-    padding: 0.95rem 1rem;
-  }
-
-  .sheet > label[for="field-prompt"] {
-    font-size: 0.75rem;
-    color: var(--mute);
-    margin-block-end: 0.35rem;
+    font-size: 1.0625rem;
+    line-height: 1.75;
+    padding: 0.9rem 1rem;
   }
 
   :where(input, select, textarea):focus-visible,
   :where(button, .btn, a):focus-visible {
     outline: 2px solid var(--prussian);
     outline-offset: 2px;
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
-    margin-block: 0.2rem 0.4rem;
   }
 
   details.advanced,
@@ -341,24 +381,28 @@
   }
 
   details.advanced summary,
-  details.ledger summary {
+  details.ledger summary,
+  .event details summary {
     cursor: pointer;
-    color: var(--mute);
-    font-size: 0.9rem;
-    padding-block: 0.2rem;
+    color: var(--ink);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding-block: 0.35rem;
     list-style: none;
   }
 
   details.advanced summary::-webkit-details-marker,
-  details.ledger summary::-webkit-details-marker {
+  details.ledger summary::-webkit-details-marker,
+  .event details summary::-webkit-details-marker {
     display: none;
   }
 
   details.advanced summary::before,
-  details.ledger summary::before {
+  details.ledger summary::before,
+  .event details summary::before {
     content: "▸ ";
     color: var(--prussian);
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-family: var(--font-mono);
   }
 
   details[open] > summary::before {
@@ -368,7 +412,7 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.65rem;
+    gap: 0.55rem;
     align-items: center;
     margin-block-start: 1rem;
   }
@@ -379,14 +423,23 @@
     border: 0;
     background: var(--copper);
     color: #fff;
-    font-weight: 600;
-    padding: 0.8rem 1.35rem;
-    min-block-size: 2.75rem;
-    letter-spacing: 0.02em;
+    font-weight: 650;
+    padding: 0.7rem 1.2rem;
+    min-block-size: 2.7rem;
+    letter-spacing: 0;
     min-inline-size: 2.5rem;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+  }
+
+  button:hover,
+  .btn:hover {
+    background: color-mix(in oklab, var(--copper) 86%, #000);
+    text-decoration: none;
+    color: #fff;
   }
 
   button.ghost,
@@ -394,6 +447,20 @@
     background: transparent;
     color: var(--ink);
     border: 1px solid var(--rule);
+  }
+
+  button.ghost:hover,
+  .btn.ghost:hover {
+    background: color-mix(in oklab, var(--prussian) 9%, var(--sheet));
+    color: var(--ink);
+  }
+
+  button.quiet,
+  .btn.quiet {
+    min-block-size: 2.1rem;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
   }
 
   button:disabled {
@@ -404,12 +471,12 @@
   .progress {
     margin-block-start: 1rem;
     color: var(--mute);
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
   }
 
   .bar {
-    block-size: 0.28rem;
+    block-size: 0.42rem;
     background: var(--rule);
     overflow: hidden;
     margin-block-start: 0.4rem;
@@ -424,8 +491,8 @@
 
   .drop {
     border: 1px dashed var(--prussian);
-    padding: 1.35rem;
-    text-align: center;
+    padding: 1.2rem;
+    text-align: start;
     color: var(--mute);
     margin-block-end: 1rem;
     background: color-mix(in oklab, var(--prussian) 6%, var(--sheet));
@@ -436,30 +503,61 @@
     color: var(--ink);
   }
 
+  .drop label {
+    font-size: 0.9375rem;
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    margin-inline: -0.15rem;
+    padding-inline: 0.15rem;
+  }
+
   table {
     inline-size: 100%;
     border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table-wrap table {
+    min-inline-size: 44rem;
+  }
+
+  td {
+    overflow-wrap: anywhere;
   }
 
   th,
   td {
     text-align: start;
-    padding: 0.65rem 0.45rem;
+    padding: 0.7rem 0.55rem;
     border-block-end: 1px solid var(--rule);
-    font-size: 0.88rem;
+    font-size: 0.875rem;
+    vertical-align: middle;
+  }
+
+  td.mono {
+    font-size: 0.8125rem;
   }
 
   th {
     color: var(--mute);
-    font-weight: 500;
-    font-size: 0.72rem;
-    letter-spacing: 0.04em;
+    font-weight: 650;
+    font-size: 0.8125rem;
+  }
+
+  td .quiet + .quiet {
+    margin-inline-start: 0.25rem;
   }
 
   .pill {
     display: inline-block;
-    padding: 0;
-    font-size: 0.82rem;
+    padding: 0.05rem 0.15rem;
+    font-size: 0.875rem;
+    font-weight: 650;
     background: none;
   }
 
@@ -470,17 +568,21 @@
   .pill.cancelled { color: var(--bad); }
 
   .toolbar {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.75rem 0.85rem;
     align-items: end;
     margin-block-end: 1rem;
   }
 
+  .toolbar button {
+    justify-self: start;
+  }
+
   .gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+    gap: 0.9rem;
   }
 
   .card {
@@ -489,6 +591,7 @@
     cursor: pointer;
     position: relative;
     min-inline-size: 0;
+    display: grid;
   }
 
   .card img {
@@ -500,56 +603,51 @@
   }
 
   .card .cap {
-    padding: 0.55rem 0.7rem 0.7rem;
+    padding: 0.65rem 0.75rem 0.8rem;
+    min-inline-size: 0;
+  }
+
+  .cap-prompt {
+    color: var(--ink);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .cap-meta {
     color: var(--mute);
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
+    margin-block-start: 0.3rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .card .hover {
-    position: absolute;
-    inset: 0;
-    background: color-mix(in oklab, var(--paper) 88%, transparent);
-    color: var(--ink);
-    padding: 0.9rem;
-    opacity: 0;
-    font-size: 0.8rem;
-    overflow: auto;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .card .hover {
-      transition: opacity 0.16s ease;
-    }
-  }
-
-  .card:hover .hover,
-  .card:focus-within .hover {
-    opacity: 1;
   }
 
   .pager {
     display: flex;
     gap: 0.6rem;
     align-items: center;
+    flex-wrap: wrap;
     margin-block-start: 1.2rem;
     color: var(--mute);
+    font-size: 0.875rem;
   }
 
   .lightbox {
     inset: 0;
     border: 0;
-    padding: 1.5rem;
-    max-inline-size: min(72rem, 96vw);
+    padding: 0;
+    max-inline-size: min(78rem, 96vw);
     max-block-size: 94dvh;
-    inline-size: min(72rem, 96vw);
+    inline-size: min(78rem, 96vw);
     background: var(--sheet);
     color: var(--ink);
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
-    gap: 1.25rem;
+    grid-template-columns: minmax(0, 1.3fr) minmax(18rem, 24rem);
+    overflow: hidden;
   }
 
   .lightbox:not([open]) {
@@ -560,38 +658,74 @@
     background: rgb(16 21 28 / 0.72);
   }
 
-  .lightbox img {
-    inline-size: 100%;
-    block-size: 100%;
-    max-block-size: 82dvh;
-    object-fit: contain;
+  .lightbox-stage {
+    display: grid;
+    place-items: center;
     background: var(--paper);
+    min-block-size: 0;
+    overflow: auto;
+    padding: 1rem;
+  }
+
+  .lightbox-stage img {
+    inline-size: auto;
+    block-size: auto;
+    max-inline-size: 100%;
+    max-block-size: calc(94dvh - 2rem);
+    object-fit: contain;
+  }
+
+  .meta {
+    overflow: auto;
+    min-block-size: 0;
+    padding: 1.15rem 1.2rem 1.35rem;
+  }
+
+  .meta-top {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-block-end: 0.5rem;
   }
 
   .meta h2 {
-    margin-block-start: 0;
+    margin: 0;
     font-size: 1.15rem;
   }
 
-  .meta p { color: var(--mute); }
+  .meta p {
+    color: var(--ink);
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
 
   .meta dl {
     display: grid;
-    grid-template-columns: 6.5rem minmax(0, 1fr);
-    gap: 0.4rem 0.65rem;
-    font-size: 0.88rem;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 0.45rem 0.65rem;
+    font-size: 0.875rem;
   }
 
   .meta dt { color: var(--mute); }
+  .meta dd { margin: 0; overflow-wrap: anywhere; }
 
-  .checks { display: grid; gap: 0.2rem; }
+  .checks { display: grid; gap: 0; }
 
   .check {
     display: flex;
     justify-content: space-between;
+    align-items: start;
     gap: 1rem;
-    padding-block: 0.55rem;
+    padding-block: 0.6rem;
     border-block-end: 1px solid var(--rule);
+    font-size: 0.9375rem;
+  }
+
+  .check > :last-child {
+    text-align: end;
+    overflow-wrap: anywhere;
+    min-inline-size: 0;
   }
 
   .ok { color: var(--ok); }
@@ -602,7 +736,9 @@
     color: var(--mute);
     margin: 0.65rem 0 0.4rem;
     white-space: pre-wrap;
-    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+    font-size: 0.875rem;
+    line-height: 1.5;
   }
 
   .apply-line.bad { color: var(--bad); }
@@ -617,42 +753,51 @@
 
   .meter > div {
     border-block-start: 2px solid var(--prussian);
-    padding-block-start: 0.45rem;
+    padding-block-start: 0.5rem;
     min-inline-size: 0;
   }
 
   .meter span {
     display: block;
     color: var(--mute);
-    font-size: 0.72rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
     margin-block-end: 0.25rem;
   }
 
   .meter .mono {
     white-space: pre-wrap;
-    line-height: 1.45;
-    font-size: 0.8rem;
+    line-height: 1.5;
+    font-size: 0.875rem;
+    color: var(--ink);
   }
 
   .snapshots {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.55rem;
-    margin-block-end: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+    gap: 0.65rem;
+    margin: 1rem 0 0.4rem;
   }
 
   .snap {
-    background: var(--paper);
-    padding: 0.7rem;
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    padding: 0.8rem 0.85rem;
     display: grid;
-    gap: 0.15rem;
+    gap: 0.2rem;
     min-inline-size: 0;
   }
 
   .snap span,
   .snap small {
     color: var(--mute);
-    font-size: 0.7rem;
+    font-size: 0.8125rem;
+  }
+
+  .snap strong {
+    font-size: 1rem;
+    font-weight: 650;
+    overflow-wrap: anywhere;
   }
 
   a {
@@ -662,46 +807,65 @@
 
   a:hover { text-decoration: underline; }
 
-  .timeline { display: grid; gap: 0.3rem; }
+  .timeline { display: grid; gap: 0; }
 
   .span {
     display: grid;
-    grid-template-columns: minmax(9rem, 1.2fr) 5rem 4.5rem 8rem minmax(0, 1fr);
-    gap: 0.55rem;
-    align-items: center;
-    padding-block: 0.4rem;
+    grid-template-columns: minmax(8rem, 1.4fr) auto auto auto minmax(0, 1fr);
+    gap: 0.4rem 0.75rem;
+    align-items: baseline;
+    padding-block: 0.5rem;
     border-block-end: 1px solid var(--rule);
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     min-inline-size: 0;
   }
 
-  .span > * { min-inline-size: 0; }
+  .span > * { min-inline-size: 0; overflow-wrap: anywhere; }
 
   .events {
-    padding: 0.4rem 1.1rem 0.8rem;
+    padding: 0.2rem 0.15rem 0.4rem;
+    display: grid;
+    gap: 0.65rem;
   }
 
   .event {
-    border-block-end: 1px solid var(--rule);
-    padding-block: 0.65rem;
+    border: 1px solid var(--rule);
+    padding: 0.85rem 1rem 0.9rem;
+    background: var(--paper);
   }
 
-  .event:last-child {
-    border-block-end: 0;
+  .event-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+    align-items: baseline;
   }
 
-  .event summary {
-    display: grid;
-    grid-template-columns: 10.5rem 3.2rem minmax(8rem, 1.3fr) 7rem minmax(7rem, 1fr) 5.5rem 7rem;
-    gap: 0.45rem;
-    align-items: center;
-    cursor: pointer;
-    list-style: none;
-    font-size: 0.82rem;
+  .event-kind {
+    font-weight: 700;
+    color: var(--prussian);
+    font-size: 0.9375rem;
   }
 
-  .event summary::-webkit-details-marker {
-    display: none;
+  .event-head time {
+    color: var(--mute);
+    font-size: 0.8125rem;
+  }
+
+  .event-usd {
+    margin-inline-start: auto;
+    font-size: 0.9375rem;
+  }
+
+  .event-sub {
+    margin: 0.35rem 0 0;
+    color: var(--mute);
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+  }
+
+  .event details {
+    margin-block-start: 0.45rem;
   }
 
   .chain {
@@ -709,55 +873,57 @@
     margin: 0.7rem 0 0;
     padding: 0;
     display: grid;
-    gap: 0.28rem;
+    gap: 0.4rem;
   }
 
   .chain li {
     display: grid;
-    grid-template-columns: 11rem minmax(0, 1fr) auto;
-    gap: 0.55rem;
-    font-size: 0.8rem;
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    grid-template-columns: minmax(6.5rem, 10rem) minmax(0, 1fr) auto;
+    gap: 0.4rem 0.7rem;
+    font-size: 0.8125rem;
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
   }
 
   .meta-inline {
     display: grid;
     grid-template-columns: 7.5rem minmax(0, 1fr);
-    gap: 0.3rem 0.7rem;
+    gap: 0.35rem 0.7rem;
     margin: 0.75rem 0 0;
-    font-size: 0.82rem;
+    font-size: 0.875rem;
   }
 
   .meta-inline dt {
     color: var(--mute);
   }
 
-  @media (max-width: 64rem) {
-    .dials {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+  .meta-inline dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .row-gap {
+    margin-block-start: 1rem;
   }
 
   @media (max-width: 52rem) {
-    .dials,
-    .meter,
-    .snapshots,
-    .grid {
+    .meter {
       grid-template-columns: 1fr;
     }
 
     .lightbox {
       grid-template-columns: 1fr;
-      padding: 1rem;
+      max-block-size: 96dvh;
     }
-  }
 
-  @media (max-width: 40rem) {
+    .lightbox-stage img {
+      max-block-size: 48dvh;
+    }
+
     .span,
-    .event summary,
     .chain li {
       grid-template-columns: 1fr;
-      gap: 0.15rem;
+      gap: 0.12rem;
     }
   }
 }

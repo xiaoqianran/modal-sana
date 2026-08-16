@@ -178,6 +178,26 @@ function formatUsd(amount) {
   return `$${amount.toFixed(4)} (${cents.toFixed(2)}¢)`;
 }
 
+function formatUsdShort(amount) {
+  if (amount == null) return "—";
+  if (Number(amount) < 0.01) return `$${Number(amount).toFixed(4)}`;
+  return `$${Number(amount).toFixed(3)}`;
+}
+
+function setTitle(page) {
+  document.title = page ? `${page} · modal-sana` : "modal-sana";
+}
+
+function shortId(value) {
+  const text = String(value || "");
+  if (text.length <= 16) return escapeHtml(text);
+  return `${escapeHtml(text.slice(0, 8))}…${escapeHtml(text.slice(-5))}`;
+}
+
+function tableWrap(inner) {
+  return `<div class="table-wrap">${inner}</div>`;
+}
+
 function formatMs(ms) {
   if (ms == null) return "—";
   return `${(ms / 1000).toFixed(3)}s`;
@@ -233,8 +253,8 @@ async function jobDetailPage(jobId) {
       <div class="check"><span>Modal 路径</span><span class="mono">${job.config?.deployed === true ? "已部署（强制）" : job.config?.deployed === false ? "一次性（强制）" : "自动"}</span></div>
       <div class="check"><span>Modal 应用</span><span class="mono">${job.modal_app_id || "—"}</span></div>
       <div class="check"><span>运行</span>${job.modal_run_url ? `<a href="${job.modal_run_url}" target="_blank" rel="noopener noreferrer">打开 Modal 运行页</a>` : "<span>—</span>"}</div>
-      <p class="lede" style="margin:16px 0 0">${detail.cost?.notes || ""}</p>
-      <div class="actions" style="margin-top:16px">
+      <p class="lede row-gap">${detail.cost?.notes || ""}</p>
+      <div class="actions">
         <button type="button" class="ghost" id="to-gallery">图库</button>
         <button type="button" class="ghost" id="to-jobs">全部任务</button>
         <button type="button" class="ghost" id="to-cost">这笔任务的费用</button>
@@ -244,7 +264,7 @@ async function jobDetailPage(jobId) {
     <div class="panel timeline">${renderTree(tree)}</div>
     <h2 class="section">生成记录</h2>
     <div class="panel">
-      <table>
+      ${tableWrap(`<table>
         <thead>
           <tr>
             <th scope="col">编号</th>
@@ -262,7 +282,7 @@ async function jobDetailPage(jobId) {
         <tbody>
           ${(detail.generations || []).map((item) => `
             <tr>
-              <td class="mono">${item.id}</td>
+              <td class="mono" title="${escapeAttr(item.id)}">${shortId(item.id)}</td>
               <td><span class="pill ${item.status}">${statusLabel(item.status)}</span></td>
               <td>${item.load_ms != null ? item.load_ms.toFixed(0) + "ms" : "—"}</td>
               <td>${item.infer_ms != null ? item.infer_ms.toFixed(0) + "ms" : "—"}</td>
@@ -274,7 +294,7 @@ async function jobDetailPage(jobId) {
               <td class="mono">${item.modal_input_id || "—"}</td>
             </tr>`).join("")}
         </tbody>
-      </table>
+      </table>`)}
     </div>
   `;
   document.getElementById("to-gallery").onclick = () => { location.hash = `#/gallery?job=${job.id}`; };
@@ -496,28 +516,35 @@ function renderCostEvents(items, error) {
   if (!items.length) {
     return `<p class="lede">${error || "这个周期没有 Modal 费用事件。真实生成会写入共享账本。"}</p>`;
   }
-  return items.map((item) => `
-    <details class="event">
-      <summary>
-        <span class="mono">${(item.ts || "").replace("T", " ").slice(0, 19)}</span>
-        <span>${kindLabel(item.kind)}</span>
-        <span class="mono">${item.job_id ? `<a href="#/job/${escapeAttr(item.job_id)}">${escapeHtml(item.job_id)}</a>` : "—"}</span>
-        <span>${item.billed_gpu || item.actual_gpu || item.requested_gpu || "—"}</span>
-        <span class="mono">${formatRate(item.usd_per_second)}</span>
-        <span class="mono">${Number(item.gpu_seconds || 0).toFixed(4)}s</span>
-        <span class="mono">${formatUsd(item.cost_usd)}</span>
-      </summary>
-      <p class="apply-line mono">${escapeHtml(item.formula || "")}</p>
-      ${renderChain(item.chain)}
-      <dl class="meta-inline">
-        <dt>模型</dt><dd>${item.model || "—"}</dd>
-        <dt>generation</dt><dd class="mono">${item.generation_id || "—"}</dd>
-        <dt>function_call</dt><dd class="mono">${item.modal_function_call_id || "—"}</dd>
-        <dt>input</dt><dd class="mono">${item.modal_input_id || "—"}</dd>
-        <dt>task</dt><dd class="mono">${item.modal_task_id || "—"}</dd>
-        <dt>显存</dt><dd class="mono">${formatVram(item)}</dd>
-      </dl>
-    </details>`).join("");
+  return items.map((item) => {
+    const job = item.job_id;
+    const gpu = item.billed_gpu || item.actual_gpu || item.requested_gpu || "—";
+    return `
+    <article class="event">
+      <div class="event-head">
+        <span class="event-kind">${kindLabel(item.kind)}</span>
+        <time datetime="${escapeAttr(item.ts || "")}">${(item.ts || "").replace("T", " ").slice(0, 19) || "—"}</time>
+        <strong class="mono event-usd">${formatUsd(item.cost_usd)}</strong>
+      </div>
+      <p class="event-sub">
+        ${escapeHtml(gpu)} · ${formatRate(item.usd_per_second)} · ${Number(item.gpu_seconds || 0).toFixed(4)}s
+        ${job ? ` · <a href="#/job/${escapeAttr(job)}" title="${escapeAttr(job)}">任务 ${shortId(job)}</a>` : ""}
+      </p>
+      <details>
+        <summary>调用链与编号</summary>
+        <p class="apply-line mono">${escapeHtml(item.formula || "")}</p>
+        ${renderChain(item.chain)}
+        <dl class="meta-inline">
+          <dt>模型</dt><dd>${item.model || "—"}</dd>
+          <dt>generation</dt><dd class="mono">${item.generation_id || "—"}</dd>
+          <dt>function_call</dt><dd class="mono">${item.modal_function_call_id || "—"}</dd>
+          <dt>input</dt><dd class="mono">${item.modal_input_id || "—"}</dd>
+          <dt>task</dt><dd class="mono">${item.modal_task_id || "—"}</dd>
+          <dt>显存</dt><dd class="mono">${formatVram(item)}</dd>
+        </dl>
+      </details>
+    </article>`;
+  }).join("");
 }
 
 async function costPage(meta, params) {
@@ -560,7 +587,7 @@ async function costPage(meta, params) {
     </div>
     <h2 class="section">单价</h2>
     <div class="panel">
-      <table>
+      ${tableWrap(`<table>
         <thead><tr><th scope="col">GPU</th><th scope="col">$/s</th><th scope="col">$/小时</th><th scope="col">¢ / 10s</th></tr></thead>
         <tbody>
           ${(meta.gpus || []).map((gpu) => `
@@ -571,23 +598,26 @@ async function costPage(meta, params) {
               <td class="mono">${(Number(gpu.usd_per_second) * 1000).toFixed(3)}</td>
             </tr>`).join("")}
         </tbody>
-      </table>
+      </table>`)}
     </div>
     <h2 class="section">每一笔调用</h2>
     <form class="toolbar" id="cost-filters">
-      <label class="field" for="cost-period">周期
+      <div class="field">
+        <label for="cost-period">周期</label>
         <select id="cost-period" name="period">
           ${[["hour", "小时"], ["day", "天"], ["week", "周"], ["month", "月"], ["all", "全部"]].map(([value, label]) => `<option value="${value}" ${value === period ? "selected" : ""}>${label}</option>`).join("")}
         </select>
-      </label>
-      <label class="field" for="cost-kind">类型
+      </div>
+      <div class="field">
+        <label for="cost-kind">类型</label>
         <select id="cost-kind" name="kind">
           ${[["", "全部"], ["gpu_load", "加载"], ["gpu_generate", "生成"]].map(([value, label]) => `<option value="${value}" ${value === kind ? "selected" : ""}>${label}</option>`).join("")}
         </select>
-      </label>
-      <label class="field" for="cost-job">任务编号
+      </div>
+      <div class="field">
+        <label for="cost-job">任务编号</label>
         <input id="cost-job" name="job" value="${escapeAttr(job)}" autocomplete="off" />
-      </label>
+      </div>
       <button type="submit" class="ghost">筛选</button>
     </form>
     <div class="panel events">${renderCostEvents(ledger.items || [], ledger.error)}</div>
@@ -598,19 +628,19 @@ async function costPage(meta, params) {
     </div>
     <h2 class="section">本机任务</h2>
     <div class="panel">
-      <table>
+      ${tableWrap(`<table>
         <thead><tr><th scope="col">任务</th><th scope="col">状态</th><th scope="col">GPU</th><th scope="col">秒</th><th scope="col">$</th></tr></thead>
         <tbody>
           ${jobs.map((row) => `
             <tr>
-              <td class="mono"><a href="#/job/${row.id}">${row.id}</a></td>
+              <td class="mono"><a href="#/job/${escapeAttr(row.id)}" title="${escapeAttr(row.id)}">${shortId(row.id)}</a></td>
               <td><span class="pill ${row.status}">${statusLabel(row.status)}</span></td>
               <td>${row.gpu}</td>
               <td class="mono">${(row.gpu_seconds || 0).toFixed(4)}</td>
               <td class="mono">${formatUsd(row.cost_usd)}</td>
             </tr>`).join("") || `<tr><td colspan="5">还没有任务。</td></tr>`}
         </tbody>
-      </table>
+      </table>`)}
     </div>
   `;
   document.getElementById("cost-filters").onsubmit = (event) => {
@@ -644,7 +674,7 @@ function batchPage(meta) {
     <form class="sheet" id="batch-form" method="post">
       <div class="drop" id="drop">
         <label for="field-file">把 prompts.txt / prompts.jsonl 拖到这里，或选择文件</label>
-        <div style="margin-top:12px"><input id="field-file" type="file" name="file" accept=".txt,.jsonl,.json,.csv" /></div>
+        <div class="row-gap"><input id="field-file" type="file" name="file" accept=".txt,.jsonl,.json,.csv" /></div>
       </div>
       <label for="field-text">或者粘贴</label>
       <textarea id="field-text" name="text" placeholder="一片森林&#10;一座未来城市"></textarea>
@@ -714,25 +744,25 @@ async function jobsPage() {
     <h1>任务</h1>
     <p class="lede">每一次生成或批量都是一个任务。继续只会重试未完成的帧。</p>
     <div class="panel">
-      <table>
+      ${tableWrap(`<table>
         <thead><tr><th scope="col">编号</th><th scope="col">状态</th><th scope="col">图片</th><th scope="col">模型</th><th scope="col">GPU</th><th scope="col">费用</th><th scope="col">操作</th></tr></thead>
         <tbody>
           ${jobs.map((job) => `
             <tr>
-              <td class="mono"><a href="#/job/${job.id}">${job.id}</a></td>
+              <td class="mono"><a href="#/job/${escapeAttr(job.id)}" title="${escapeAttr(job.id)}">${shortId(job.id)}</a></td>
               <td><span class="pill ${job.status}">${statusLabel(job.status)}</span></td>
               <td>${job.completed_images}/${job.total_images}</td>
-              <td>${job.model}</td>
-              <td>${job.gpu}</td>
+              <td>${escapeHtml(job.model)}</td>
+              <td>${escapeHtml(job.gpu)}</td>
               <td class="mono">${formatUsd(job.cost_usd)}</td>
               <td>
-                <button type="button" class="ghost" data-job="${job.id}">追踪</button>
-                <button type="button" class="ghost" data-gallery="${job.id}">图库</button>
-                <button type="button" class="ghost" data-resume="${job.id}">继续</button>
+                <button type="button" class="ghost quiet" data-job="${escapeAttr(job.id)}">追踪</button>
+                <button type="button" class="ghost quiet" data-gallery="${escapeAttr(job.id)}">图库</button>
+                <button type="button" class="ghost quiet" data-resume="${escapeAttr(job.id)}">继续</button>
               </td>
             </tr>`).join("") || `<tr><td colspan="7">还没有任务。</td></tr>`}
         </tbody>
-      </table>
+      </table>`)}
     </div>
   `;
   main.querySelectorAll("[data-job]").forEach((button) => {
@@ -762,37 +792,40 @@ async function galleryPage(params) {
   const sortLabels = { newest: "最新", oldest: "最旧", fastest: "最快", slowest: "最慢" };
   main.innerHTML = `
     <h1>图库</h1>
-    <p class="lede">${data.total} 张图。悬停卡片看提示词、种子、GPU 和耗时。没有匿名帧。</p>
+    <p class="lede">${data.total} 张图。点开卡片看完整提示词、种子、GPU 和耗时。</p>
     <form class="toolbar" id="filters" method="get">
-      <label class="field" for="filter-q">搜索提示词
-        <input id="filter-q" name="q" value="${q}" />
-      </label>
-      <label class="field" for="filter-job">任务编号
-        <input id="filter-job" name="job" value="${job}" autocomplete="off" />
-      </label>
-      <label class="field" for="filter-sort">排序
+      <div class="field">
+        <label for="filter-q">搜索提示词</label>
+        <input id="filter-q" name="q" value="${escapeAttr(q)}" />
+      </div>
+      <div class="field">
+        <label for="filter-job">任务编号</label>
+        <input id="filter-job" name="job" value="${escapeAttr(job)}" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="filter-sort">排序</label>
         <select id="filter-sort" name="sort">
           ${Object.entries(sortLabels).map(([item, label]) => `<option value="${item}" ${item === sort ? "selected" : ""}>${label}</option>`).join("")}
         </select>
-      </label>
-      <label class="field" for="filter-per">每页
+      </div>
+      <div class="field">
+        <label for="filter-per">每页</label>
         <select id="filter-per" name="per">
           ${[50, 100, 200].map((item) => `<option value="${item}" ${item === per ? "selected" : ""}>${item}</option>`).join("")}
         </select>
-      </label>
+      </div>
       <button type="submit" class="ghost">筛选</button>
     </form>
-    <div class="gallery">
+    ${data.items.length ? `<div class="gallery">
       ${data.items.map((image) => `
-        <article class="card" data-id="${image.id}">
+        <article class="card" data-id="${escapeAttr(image.id)}" tabindex="0">
           <img src="/api/images/${image.id}/file" alt="${escapeAttr(image.prompt)}" width="${image.width || 1024}" height="${image.height || 1024}" style="aspect-ratio:${image.width || 1024} / ${image.height || 1024}" />
-          <div class="cap">${escapeHtml(image.prompt)}</div>
-          <div class="hover">
-            <div>${escapeHtml(image.prompt)}</div>
-            <div class="mono" style="margin-top:10px">种子 ${image.seed}<br>${image.model}<br>${image.gpu}<br>${image.latency_ms ? (image.latency_ms / 1000).toFixed(2) + "s" : ""}<br>${formatUsd(image.cost_usd)}</div>
+          <div class="cap">
+            <div class="cap-prompt">${escapeHtml(image.prompt)}</div>
+            <div class="cap-meta mono">${escapeHtml(image.gpu || "")} · 种子 ${image.seed}${image.latency_ms ? ` · ${(image.latency_ms / 1000).toFixed(1)}s` : ""} · ${formatUsdShort(image.cost_usd)}</div>
           </div>
-        </article>`).join("") || "<p>还没有图。先去生成一页。</p>"}
-    </div>
+        </article>`).join("")}
+    </div>` : `<p class="lede">还没有图。<a href="#/generate">先去出图</a>。</p>`}
     <div class="pager">
       <button type="button" class="ghost" ${page <= 1 ? "disabled" : ""} id="prev">上一页</button>
       <span>第 ${data.page} 页 · 每页 ${data.per_page} 张</span>
@@ -821,6 +854,12 @@ async function galleryPage(params) {
   };
   main.querySelectorAll(".card").forEach((card) => {
     card.onclick = () => openLightbox(card.dataset.id);
+    card.onkeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openLightbox(card.dataset.id);
+      }
+    };
   });
 }
 
@@ -838,9 +877,14 @@ function escapeAttr(value) {
 async function openLightbox(imageId) {
   const image = await api(`/api/images/${imageId}`);
   lightbox.innerHTML = `
-    <img src="/api/images/${image.id}/file" alt="${escapeAttr(image.prompt)}" width="${image.width || 1024}" height="${image.height || 1024}" />
+    <div class="lightbox-stage">
+      <img src="/api/images/${image.id}/file" alt="${escapeAttr(image.prompt)}" width="${image.width || 1024}" height="${image.height || 1024}" />
+    </div>
     <div class="meta">
-      <h2 id="lightbox-title">这一帧</h2>
+      <div class="meta-top">
+        <h2 id="lightbox-title">这一帧</h2>
+        <button type="button" class="ghost quiet" id="close">关闭</button>
+      </div>
       <p>${escapeHtml(image.prompt)}</p>
       <dl>
         <dt>种子</dt><dd class="mono">${image.seed}</dd>
@@ -857,16 +901,18 @@ async function openLightbox(imageId) {
         <dt>输入</dt><dd class="mono">${image.modal_input_id || "—"}</dd>
         <dt>任务</dt><dd class="mono"><a href="#/job/${image.job_id}">${image.job_id}</a></dd>
       </dl>
-      <div class="actions" style="margin-top:18px">
+      <div class="actions row-gap">
         <button type="button" id="copy">复制提示词</button>
         <button type="button" class="ghost" id="regen">再生成</button>
         <a class="btn ghost" href="/api/images/${image.id}/file" download>下载</a>
-        <button type="button" class="ghost" id="close">关闭</button>
       </div>
     </div>
   `;
   openLightboxDialog();
   document.getElementById("close").onclick = closeLightbox;
+  lightbox.querySelectorAll('a[href^="#/"]').forEach((link) => {
+    link.addEventListener("click", closeLightbox);
+  });
   document.getElementById("copy").onclick = async () => {
     await navigator.clipboard.writeText(image.prompt);
   };
@@ -885,7 +931,7 @@ function benchmarkPage(meta) {
     <div class="panel">
       <p>要真实数字，在终端跑：</p>
       <p class="mono">uv run modal-sana benchmark --gpu L40S,RTX-PRO-6000 --count 8</p>
-      <table>
+      ${tableWrap(`<table>
         <thead><tr><th scope="col">GPU</th><th scope="col">$/小时</th><th scope="col">显存</th><th scope="col">批大小</th><th scope="col">备注</th></tr></thead>
         <tbody>
           ${meta.gpus.map((gpu) => `
@@ -897,7 +943,7 @@ function benchmarkPage(meta) {
               <td>${gpu.notes}</td>
             </tr>`).join("")}
         </tbody>
-      </table>
+      </table>`)}
     </div>
   `;
 }
@@ -937,6 +983,19 @@ async function render(forced) {
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
+  const titles = {
+    generate: "出图",
+    batch: "批量",
+    gallery: "图库",
+    jobs: "任务",
+    cost: "费用",
+    benchmark: "基准",
+    settings: "设置",
+  };
+  const wide = page === "gallery" || page === "cost" || page === "jobs" || page.startsWith("job/");
+  main.classList.toggle("is-wide", wide);
+  if (page.startsWith("job/")) setTitle("任务");
+  else setTitle(titles[page] || "出图");
   if (!state.meta) state.meta = await api("/api/meta");
   if (page === "generate") generatePage(state.meta);
   else if (page === "batch") batchPage(state.meta);
