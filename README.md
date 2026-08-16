@@ -134,12 +134,15 @@ uv run modal-sana generate "a white cat" --ephemeral
 
 `uv run modal-sana web` 打开 `http://127.0.0.1:7860`。这是本地 FastAPI，不是 Modal 的 `serve`。GPU 默认打已 deploy 的 `modal-sana` App。
 
-- **Generate** 单 Prompt
-- **Batch** 拖文件或粘贴多行
-- **Jobs** 状态 / Resume
-- **Gallery** 分页、筛选、Hover Prompt、详情里复制 / 再生成 / 下载
-- **Benchmark** GPU 价目与推荐 batch
-- **Settings** `doctor` 结果
+费用页是真实地址 **http://127.0.0.1:7860/cost**（不是 `#/cost`）。出图 `/generate`，图库 `/gallery`，任务 `/jobs`。
+
+- **Generate** `/generate` 单 Prompt
+- **Batch** `/batch` 拖文件或粘贴多行
+- **Gallery** `/gallery` 分页、筛选、卡片说明、详情里复制 / 再生成 / 下载
+- **Jobs** `/jobs` 状态 / Resume
+- **Cost** `/cost` 每一笔 GPU 账、$/s、调用链
+- **Benchmark** `/benchmark` GPU 价目与推荐 batch
+- **Settings** `/settings` `doctor` 结果
 
 进度走 SSE：`image.completed` 一张一张进来，不会等整批结束才刷新。
 

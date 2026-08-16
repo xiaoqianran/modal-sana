@@ -13,10 +13,51 @@ const STATUS = {
 const state = {
   meta: null,
   source: null,
+  costReq: 0,
 };
 
+const PAGES = ["generate", "batch", "gallery", "jobs", "cost", "benchmark", "settings"];
+
+function migrateHashToPath() {
+  const raw = (location.hash || "").replace(/^#\/?/, "");
+  if (!raw) return;
+  const [name, query] = raw.split("?");
+  let path = "/generate";
+  if (name.startsWith("job/")) path = `/${name}`;
+  else if (PAGES.includes(name)) path = `/${name}`;
+  history.replaceState(null, "", query ? `${path}?${query}` : path);
+}
+
+function currentPage() {
+  migrateHashToPath();
+  const path = location.pathname.replace(/^\/+|\/+$/g, "");
+  if (!path || path === "generate") return "generate";
+  if (path.startsWith("job/")) return path;
+  if (PAGES.includes(path)) return path;
+  return "generate";
+}
+
+function go(path) {
+  const url = path.startsWith("/") ? path : `/${path}`;
+  if (`${location.pathname}${location.search}` !== url) {
+    history.pushState(null, "", url);
+  }
+  return render();
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
+  const { timeout = 25000, ...rest } = options;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  let response;
+  try {
+    response = await fetch(path, { ...rest, signal: ctrl.signal });
+  } catch (error) {
+    if (error && error.name === "AbortError") throw new Error("请求超时");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) {
     let detail = response.statusText;
     try {
@@ -297,9 +338,9 @@ async function jobDetailPage(jobId) {
       </table>`)}
     </div>
   `;
-  document.getElementById("to-gallery").onclick = () => { location.hash = `#/gallery?job=${job.id}`; };
-  document.getElementById("to-jobs").onclick = () => { location.hash = "#/jobs"; };
-  document.getElementById("to-cost").onclick = () => { location.hash = `#/cost?job=${job.id}`; };
+  document.getElementById("to-gallery").onclick = () => { go(`/gallery?job=${job.id}`); };
+  document.getElementById("to-jobs").onclick = () => { go("/jobs"); };
+  document.getElementById("to-cost").onclick = () => { go(`/cost?job=${job.id}`); };
 }
 
 function renderTree(nodes, depth = 0) {
@@ -361,7 +402,7 @@ function listenJob(jobId) {
       setProgress(event.payload.completed_images || 0, event.payload.total_images || 0, statusLabel(event.payload.status));
       state.source.close();
       if (event.type === "job.failed") alert(event.payload.error || "任务失败");
-      if (event.type === "job.completed") render("gallery");
+      if (event.type === "job.completed") go("/gallery");
     }
   };
 }
@@ -390,7 +431,7 @@ function generatePage(meta) {
       <div id="applied-banner"></div>
       ${progressBox()}
     </form>
-    <p class="lede"><a href="#/cost">查看每一笔 Modal 费用和调用链</a></p>
+    <p class="lede"><a href="/cost">查看每一笔 Modal 费用和调用链</a></p>
   `;
   const form = document.getElementById("gen-form");
   const refresh = () => refreshForecast(form);
@@ -528,7 +569,7 @@ function renderCostEvents(items, error) {
       </div>
       <p class="event-sub">
         ${escapeHtml(gpu)} · ${formatRate(item.usd_per_second)} · ${Number(item.gpu_seconds || 0).toFixed(4)}s
-        ${job ? ` · <a href="#/job/${escapeAttr(job)}" title="${escapeAttr(job)}">任务 ${shortId(job)}</a>` : ""}
+        ${job ? ` · <a href="/job/${escapeAttr(job)}" title="${escapeAttr(job)}">任务 ${shortId(job)}</a>` : ""}
       </p>
       <details>
         <summary>调用链与编号</summary>
@@ -553,31 +594,52 @@ async function costPage(meta, params) {
   const job = params.get("job") || "";
   const page = Number(params.get("page") || 1);
   state.ledgerPage = page;
+  const req = ++state.costReq;
+  const view = {
+    period,
+    kind,
+    job,
+    page,
+    params,
+    ledger: { items: [], page: 1, pages: 1, total: 0, snapshots: {} },
+    balance: { ok: false },
+    jobs: [],
+    loading: true,
+  };
+  paintCost(meta, view);
   const query = new URLSearchParams({ period, page: String(page), per_page: "25" });
   if (kind) query.set("kind", kind);
   if (job) query.set("job_id", job);
-  let ledger = {};
-  let balance = {};
-  let jobs = [];
-  try {
-    [ledger, balance, jobs] = await Promise.all([
-      api(`/api/cost/ledger?${query}`),
-      api("/api/cost/balance"),
-      api("/api/jobs"),
-    ]);
-  } catch (error) {
-    main.innerHTML = `<h1>费用</h1><p class="lede">${escapeHtml(error.message)}</p>`;
-    return;
+  const settled = await Promise.allSettled([
+    api(`/api/cost/ledger?${query}`, { timeout: 8000 }),
+    api("/api/cost/balance", { timeout: 8000 }),
+    api("/api/jobs", { timeout: 8000 }),
+  ]);
+  if (req !== state.costReq) return;
+  if (settled[0].status === "fulfilled") view.ledger = settled[0].value || view.ledger;
+  else view.ledger = { ...view.ledger, error: settled[0].reason?.message || "账本不可用" };
+  if (settled[1].status === "fulfilled") view.balance = settled[1].value || view.balance;
+  else view.balance = { ok: false, error: settled[1].reason?.message || "账单不可用" };
+  if (settled[2].status === "fulfilled") {
+    const rows = settled[2].value;
+    view.jobs = Array.isArray(rows) ? rows : [];
   }
+  view.loading = false;
+  paintCost(meta, view);
+}
+
+function paintCost(meta, view) {
+  const { period, kind, job, page, params, ledger, balance, jobs, loading } = view;
   const grainLabel = { hour: "小时", day: "天", week: "周", month: "月", all: "全部" };
   const snaps = ledger.snapshots || {};
+  const rows = Array.isArray(jobs) ? jobs : [];
   main.innerHTML = `
     <h1>费用</h1>
-    <p class="lede">每一笔都是 Modal GPU 秒 × 公布的每秒单价。点开看调用链和对应任务。发票以 <code>modal billing</code> 为准。</p>
+    <p class="lede">这是 <code>/cost</code>。每一笔都是 Modal GPU 秒 × 公布的每秒单价。发票以 <code>modal billing</code> 为准。</p>
     <section class="panel">
       <div class="check"><span>工作区</span><span class="mono">${balance.workspace || "—"}</span></div>
-      <div class="check"><span>本月计量</span><span class="mono">${balance.ok ? formatUsd(balance.metered_usd) : (balance.error || "—")}</span></div>
-      <div class="check"><span>剩余（估）</span><span class="mono">${balance.ok ? formatUsd(balance.remaining_usd) : "—"}</span></div>
+      <div class="check"><span>本月计量</span><span class="mono">${balance.ok ? formatUsd(balance.metered_usd) : (balance.error || (loading ? "读取中…" : "—"))}</span></div>
+      <div class="check"><span>剩余（估）</span><span class="mono">${balance.ok ? formatUsd(balance.remaining_usd) : (loading ? "读取中…" : "—")}</span></div>
     </section>
     <div class="snapshots" id="ledger-snaps">
       ${["hour", "day", "week", "month"].map((grain) => {
@@ -620,7 +682,7 @@ async function costPage(meta, params) {
       </div>
       <button type="submit" class="ghost">筛选</button>
     </form>
-    <div class="panel events">${renderCostEvents(ledger.items || [], ledger.error)}</div>
+    <div class="panel events">${loading ? `<p class="lede">正在读取账本…</p>` : renderCostEvents(ledger.items || [], ledger.error)}</div>
     <div class="pager">
       <button type="button" class="ghost" id="ledger-prev" ${page <= 1 ? "disabled" : ""}>上一页</button>
       <span id="ledger-page">第 ${ledger.page || 1} / ${ledger.pages || 1} 页 · ${ledger.total || 0} 条</span>
@@ -631,14 +693,14 @@ async function costPage(meta, params) {
       ${tableWrap(`<table>
         <thead><tr><th scope="col">任务</th><th scope="col">状态</th><th scope="col">GPU</th><th scope="col">秒</th><th scope="col">$</th></tr></thead>
         <tbody>
-          ${jobs.map((row) => `
+          ${rows.map((row) => `
             <tr>
-              <td class="mono"><a href="#/job/${escapeAttr(row.id)}" title="${escapeAttr(row.id)}">${shortId(row.id)}</a></td>
+              <td class="mono"><a href="/job/${escapeAttr(row.id)}" title="${escapeAttr(row.id)}">${shortId(row.id)}</a></td>
               <td><span class="pill ${row.status}">${statusLabel(row.status)}</span></td>
               <td>${row.gpu}</td>
               <td class="mono">${(row.gpu_seconds || 0).toFixed(4)}</td>
               <td class="mono">${formatUsd(row.cost_usd)}</td>
-            </tr>`).join("") || `<tr><td colspan="5">还没有任务。</td></tr>`}
+            </tr>`).join("") || `<tr><td colspan="5">${loading ? "读取中…" : "还没有任务。"}</td></tr>`}
         </tbody>
       </table>`)}
     </div>
@@ -652,17 +714,17 @@ async function costPage(meta, params) {
       job: data.get("job") || "",
       page: "1",
     });
-    location.hash = `#/cost?${next}`;
+    go(`/cost?${next}`);
   };
   document.getElementById("ledger-prev").onclick = () => {
     const next = new URLSearchParams(params);
     next.set("page", String(Math.max(1, page - 1)));
-    location.hash = `#/cost?${next}`;
+    go(`/cost?${next}`);
   };
   document.getElementById("ledger-next").onclick = () => {
     const next = new URLSearchParams(params);
     next.set("page", String(page + 1));
-    location.hash = `#/cost?${next}`;
+    go(`/cost?${next}`);
   };
 }
 
@@ -749,7 +811,7 @@ async function jobsPage() {
         <tbody>
           ${jobs.map((job) => `
             <tr>
-              <td class="mono"><a href="#/job/${escapeAttr(job.id)}" title="${escapeAttr(job.id)}">${shortId(job.id)}</a></td>
+              <td class="mono"><a href="/job/${escapeAttr(job.id)}" title="${escapeAttr(job.id)}">${shortId(job.id)}</a></td>
               <td><span class="pill ${job.status}">${statusLabel(job.status)}</span></td>
               <td>${job.completed_images}/${job.total_images}</td>
               <td>${escapeHtml(job.model)}</td>
@@ -766,15 +828,15 @@ async function jobsPage() {
     </div>
   `;
   main.querySelectorAll("[data-job]").forEach((button) => {
-    button.onclick = () => { location.hash = `#/job/${button.dataset.job}`; };
+    button.onclick = () => { go(`/job/${button.dataset.job}`); };
   });
   main.querySelectorAll("[data-gallery]").forEach((button) => {
-    button.onclick = () => { location.hash = `#/gallery?job=${button.dataset.gallery}`; };
+    button.onclick = () => { go(`/gallery?job=${button.dataset.gallery}`); };
   });
   main.querySelectorAll("[data-resume]").forEach((button) => {
     button.onclick = async () => {
       await api(`/api/jobs/${button.dataset.resume}/resume`, { method: "POST" });
-      render("jobs");
+      render();
     };
   });
 }
@@ -825,7 +887,7 @@ async function galleryPage(params) {
             <div class="cap-meta mono">${escapeHtml(image.gpu || "")} · 种子 ${image.seed}${image.latency_ms ? ` · ${(image.latency_ms / 1000).toFixed(1)}s` : ""} · ${formatUsdShort(image.cost_usd)}</div>
           </div>
         </article>`).join("")}
-    </div>` : `<p class="lede">还没有图。<a href="#/generate">先去出图</a>。</p>`}
+    </div>` : `<p class="lede">还没有图。<a href="/generate">先去出图</a>。</p>`}
     <div class="pager">
       <button type="button" class="ghost" ${page <= 1 ? "disabled" : ""} id="prev">上一页</button>
       <span>第 ${data.page} 页 · 每页 ${data.per_page} 张</span>
@@ -842,15 +904,15 @@ async function galleryPage(params) {
       per: form.get("per"),
       page: "1",
     });
-    location.hash = `#/gallery?${next}`;
+    go(`/gallery?${next}`);
   };
   document.getElementById("prev").onclick = () => {
     params.set("page", String(page - 1));
-    location.hash = `#/gallery?${params}`;
+    go(`/gallery?${params}`);
   };
   document.getElementById("next").onclick = () => {
     params.set("page", String(page + 1));
-    location.hash = `#/gallery?${params}`;
+    go(`/gallery?${params}`);
   };
   main.querySelectorAll(".card").forEach((card) => {
     card.onclick = () => openLightbox(card.dataset.id);
@@ -899,7 +961,7 @@ async function openLightbox(imageId) {
         <dt>费用</dt><dd>${formatUsd(image.cost_usd)}</dd>
         <dt>调用</dt><dd class="mono">${image.modal_function_call_id || "—"}</dd>
         <dt>输入</dt><dd class="mono">${image.modal_input_id || "—"}</dd>
-        <dt>任务</dt><dd class="mono"><a href="#/job/${image.job_id}">${image.job_id}</a></dd>
+        <dt>任务</dt><dd class="mono"><a href="/job/${image.job_id}">${image.job_id}</a></dd>
       </dl>
       <div class="actions row-gap">
         <button type="button" id="copy">复制提示词</button>
@@ -910,7 +972,7 @@ async function openLightbox(imageId) {
   `;
   openLightboxDialog();
   document.getElementById("close").onclick = closeLightbox;
-  lightbox.querySelectorAll('a[href^="#/"]').forEach((link) => {
+  lightbox.querySelectorAll('a[href^="/job"]').forEach((link) => {
     link.addEventListener("click", closeLightbox);
   });
   document.getElementById("copy").onclick = async () => {
@@ -919,7 +981,7 @@ async function openLightbox(imageId) {
   document.getElementById("regen").onclick = async () => {
     const job = await api(`/api/images/${image.id}/regenerate`, { method: "POST" });
     closeLightbox();
-    location.hash = "#/jobs";
+    go("/jobs");
     alert(`已排队 ${job.id}`);
   };
 }
@@ -971,44 +1033,67 @@ async function settingsPage(meta) {
   `;
 }
 
-async function render(forced) {
-  const hash = location.hash.replace(/^#\/?/, "") || "generate";
-  const [pageName, query] = hash.split("?");
-  const page = forced || pageName || "generate";
-  const params = new URLSearchParams(query || "");
-  document.querySelectorAll("nav a").forEach((link) => {
-    const active = link.dataset.page === page
-      || (page.startsWith("job/") && link.dataset.page === "jobs")
-      || (page.startsWith("cost") && link.dataset.page === "cost");
-    if (active) link.setAttribute("aria-current", "page");
-    else link.removeAttribute("aria-current");
-  });
-  const titles = {
-    generate: "出图",
-    batch: "批量",
-    gallery: "图库",
-    jobs: "任务",
-    cost: "费用",
-    benchmark: "基准",
-    settings: "设置",
-  };
-  const wide = page === "gallery" || page === "cost" || page === "jobs" || page.startsWith("job/");
-  main.classList.toggle("is-wide", wide);
-  if (page.startsWith("job/")) setTitle("任务");
-  else setTitle(titles[page] || "出图");
-  if (!state.meta) state.meta = await api("/api/meta");
-  if (page === "generate") generatePage(state.meta);
-  else if (page === "batch") batchPage(state.meta);
-  else if (page === "jobs") await jobsPage();
-  else if (page.startsWith("job/")) await jobDetailPage(page.slice(4));
-  else if (page === "gallery") await galleryPage(params);
-  else if (page === "cost") await costPage(state.meta, params);
-  else if (page === "benchmark") benchmarkPage(state.meta);
-  else if (page === "settings") await settingsPage(state.meta);
-  else generatePage(state.meta);
+async function render() {
+  try {
+    const page = currentPage();
+    const params = new URLSearchParams(location.search);
+    document.querySelectorAll("nav a").forEach((link) => {
+      const active = link.dataset.page === page
+        || (page.startsWith("job/") && link.dataset.page === "jobs")
+        || (page === "cost" && link.dataset.page === "cost");
+      if (active) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+    const titles = {
+      generate: "出图",
+      batch: "批量",
+      gallery: "图库",
+      jobs: "任务",
+      cost: "费用",
+      benchmark: "基准",
+      settings: "设置",
+    };
+    const wide = page === "gallery" || page === "cost" || page === "jobs" || page.startsWith("job/");
+    main.classList.toggle("is-wide", wide);
+    if (page.startsWith("job/")) setTitle("任务");
+    else setTitle(titles[page] || "出图");
+    if (!state.meta) state.meta = await api("/api/meta");
+    if (page === "generate") generatePage(state.meta);
+    else if (page === "batch") batchPage(state.meta);
+    else if (page === "jobs") await jobsPage();
+    else if (page.startsWith("job/")) await jobDetailPage(page.slice(4));
+    else if (page === "gallery") await galleryPage(params);
+    else if (page === "cost") await costPage(state.meta, params);
+    else if (page === "benchmark") benchmarkPage(state.meta);
+    else if (page === "settings") await settingsPage(state.meta);
+    else generatePage(state.meta);
+  } catch (error) {
+    main.innerHTML = `<h1>页面出错</h1><p class="lede">${escapeHtml(error.message)}</p>`;
+  }
 }
 
-window.addEventListener("hashchange", () => render());
+window.addEventListener("popstate", () => { render(); });
+window.addEventListener("hashchange", () => { render(); });
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a[href]");
+  if (!link || event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (link.target && link.target !== "_self") return;
+  if (link.hasAttribute("download")) return;
+  const href = link.getAttribute("href") || "";
+  if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+  let url;
+  try {
+    url = new URL(link.href, location.origin);
+  } catch {
+    return;
+  }
+  if (url.origin !== location.origin) return;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/static/")) return;
+  event.preventDefault();
+  closeLightbox();
+  go(url.pathname + url.search);
+});
 lightbox.addEventListener("click", (event) => {
   if (event.target === lightbox) closeLightbox();
 });

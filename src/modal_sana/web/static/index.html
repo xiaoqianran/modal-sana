@@ -8,28 +8,29 @@
   <meta name="theme-color" content="#f7f9fb" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#171e27" media="(prefers-color-scheme: dark)" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=0.1.13" />
 </head>
 <body>
   <a class="skip" href="#main">跳到内容</a>
   <header class="mast">
-    <a class="brand" href="#/generate">
+    <a class="brand" href="/generate">
       <span class="mark" aria-hidden="true"></span>
       <span class="brand-name">modal-sana</span>
     </a>
     <nav aria-label="主导航" id="nav">
-      <a href="#/generate" data-page="generate">出图</a>
-      <a href="#/batch" data-page="batch">批量</a>
-      <a href="#/gallery" data-page="gallery">图库</a>
-      <a href="#/jobs" data-page="jobs">任务</a>
-      <a href="#/cost" data-page="cost">费用</a>
-      <a href="#/benchmark" data-page="benchmark">基准</a>
-      <a href="#/settings" data-page="settings">设置</a>
+      <a href="/generate" data-page="generate">出图</a>
+      <a href="/batch" data-page="batch">批量</a>
+      <a href="/gallery" data-page="gallery">图库</a>
+      <a href="/jobs" data-page="jobs">任务</a>
+      <a href="/cost" data-page="cost">费用</a>
+      <a href="/benchmark" data-page="benchmark">基准</a>
+      <a href="/settings" data-page="settings">设置</a>
     </nav>
     <p class="mast-status" id="mast-status" role="status">正在检查 Modal…</p>
   </header>
   <main id="main" tabindex="-1"></main>
   <dialog id="lightbox" class="lightbox" aria-labelledby="lightbox-title"></dialog>
-  <script src="/static/app.js" type="module"></script>
+  <noscript><p class="lede" style="padding:1rem">工作台需要 JavaScript。费用页地址是 <a href="/cost">/cost</a>。</p></noscript>
+  <script src="/static/app.js?v=0.1.13" type="module"></script>
 </body>
 </html>
