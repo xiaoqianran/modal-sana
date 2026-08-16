@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path("data")
     host: str = "127.0.0.1"
-    port: int = 7860
+    port: int = 7862
     default_model: str = "sana-sprint-1.6b"
     default_gpu: str = "L40S"
     deployed: bool | None = None

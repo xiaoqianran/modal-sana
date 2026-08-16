@@ -53,7 +53,7 @@ ImageGenerator protocol
 第一版范围（有意收口）：
 
 - 模型：SANA Sprint / SANA / SANA 1.5（默认 Sprint 1.6B）
-- 入口：CLI + 本地 Web（`:7860`）
+- 入口：CLI + 本地 Web（`:7862`）
 - 输入：单 Prompt、TXT、JSONL、JSON、CSV
 - 能力：Job、batch、retry、resume、Gallery、SSE 进度
 - 不做：Tauri EXE、FLUX、Prompt Matrix、Auto GPU
@@ -132,9 +132,9 @@ uv run modal-sana generate "a white cat" --ephemeral
 
 ## Web
 
-`uv run modal-sana web` 打开 `http://127.0.0.1:7860`。这是本地 FastAPI，不是 Modal 的 `serve`。GPU 默认打已 deploy 的 `modal-sana` App。
+`uv run modal-sana web` 打开 `http://127.0.0.1:7862`。这是本地 FastAPI，不是 Modal 的 `serve`。GPU 默认打已 deploy 的 `modal-sana` App。
 
-费用页是真实地址 **http://127.0.0.1:7860/cost**（不是 `#/cost`）。出图 `/generate`，图库 `/gallery`，任务 `/jobs`。
+费用页是真实地址 **http://127.0.0.1:7862/cost**（不是 `#/cost`）。出图 `/generate`，图库 `/gallery`，任务 `/jobs`。
 
 - **Generate** `/generate` 单 Prompt
 - **Batch** `/batch` 拖文件或粘贴多行
