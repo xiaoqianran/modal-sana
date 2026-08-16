@@ -75,7 +75,7 @@ function select(name, label, options, value) {
 function gpuChoices(meta) {
   return (meta.gpus || []).map((gpu) => ({
     id: gpu.id,
-    name: `${String(gpu.id).replaceAll("-", " ")} · $${Number(gpu.usd_per_hour).toFixed(2)}/时 · ${gpu.vram_gb}GB`,
+    name: `${String(gpu.id).replaceAll("-", " ")} · ${gpu.vram_gb}GB · $${Number(gpu.usd_per_hour).toFixed(2)}/时`,
   }));
 }
 
@@ -107,8 +107,8 @@ function settingsGrid(d, meta) {
     <fieldset class="settings">
       <legend>机位</legend>
       <div class="dials">
-        ${select("model", "模型（切换会改到原生分辨率；4K 默认 RTX PRO 6000）", modelChoices(meta), d.model)}
-        ${select("gpu", "GPU（单独选；4K 默认 RTX PRO 6000）", gpuChoices(meta), d.gpu)}
+        ${select("model", "模型", modelChoices(meta), d.model)}
+        ${select("gpu", "GPU", gpuChoices(meta), d.gpu)}
         ${field("count", "张数", d.count, "number")}
         ${select("image_format", "格式", ["png", "jpg", "webp"], d.format)}
       </div>
@@ -333,7 +333,7 @@ function generatePage(meta) {
   const d = defaultsFrom(meta);
   main.innerHTML = `
     <h1>出图</h1>
-    <p class="lede">写一条提示词，选模型和 GPU。这是本地工作台，不是 <code>modal serve</code>。第一次没部署时会自动 deploy。</p>
+    <p class="lede">写提示词，选模型和 GPU。本地工作台，不是 <code>modal serve</code>。</p>
     <p class="lede mono" id="runtime-line"></p>
     <form class="sheet" id="gen-form" method="post">
       <label for="field-prompt">提示词</label>
@@ -491,13 +491,13 @@ function renderForecast(data) {
     const node = document.getElementById(id);
     if (node) node.textContent = text;
   };
-  set("fc-load", `${formatUsd(load.usd)}\n${(load.seconds || 0).toFixed(2)}s · ${load.containers || 1} 个容器\n${load.source || ""}`);
-  set("fc-gen", `${formatUsd(generate.usd)}\n${(generate.seconds || 0).toFixed(2)}s · ${generate.count || 0} 张\n${generate.source || ""}`);
+  set("fc-load", `${formatUsd(load.usd)}\n${(load.seconds || 0).toFixed(1)}s`);
+  set("fc-gen", `${formatUsd(generate.usd)}\n${(generate.seconds || 0).toFixed(1)}s · ${generate.count || 0} 张`);
   if (balance.ok) {
     const remain = balance.remaining_usd == null ? "—" : formatUsd(balance.remaining_usd);
     set(
       "fc-bal",
-      `${remain} 剩余（估）\n本月计量 ${formatUsd(balance.metered_usd)}\n已用额度 ${formatUsd(balance.credits_applied_usd)} · 账单 ${formatUsd(balance.billed_usd)}`,
+      `${remain} 剩余\n本月 ${formatUsd(balance.metered_usd)}`,
     );
   } else {
     set("fc-bal", balance.error || "Modal 账单暂不可用");
