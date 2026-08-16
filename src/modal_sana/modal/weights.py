@@ -18,7 +18,7 @@ def is_model_ready(model_id: str, *, root: str | Path | None = None) -> bool:
 
 
 def models_to_prefetch(model: str | None, *, all_models: bool = False) -> list[str]:
-    """Default is every registered SANA model. A name pins one snapshot."""
+    """Default is the base 1024px set. ``--all`` includes 2K/4K."""
     if (model or "").strip():
         return [get_model(model.strip()).id]
     if all_models:

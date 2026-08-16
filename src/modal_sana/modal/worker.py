@@ -9,7 +9,7 @@ from modal_sana.core.cost import cost_for_seconds, item_gpu_seconds
 from modal_sana.modal.app import app
 from modal_sana.modal.image import image
 from modal_sana.modal.ledger import archive_cost_events, list_cost_events, record_cost_events
-from modal_sana.modal.prefetch import list_volume_models, prefetch_model
+from modal_sana.modal.prefetch import list_volume_models, prefetch_model, registered_model_ids
 from modal_sana.modal.runtime import probe_runtime
 from modal_sana.modal.volumes import CACHE_DIR, huggingface_cache_volume
 from modal_sana.modal.weights import assert_model_ready
@@ -470,5 +470,6 @@ def _vram_mb() -> float | None:
 # Register CPU prefetch + ledger on the same App so `modal deploy -m modal_sana.modal.worker` includes them.
 _ = prefetch_model
 _ = list_volume_models
+_ = registered_model_ids
 _ = archive_cost_events
 _ = list_cost_events

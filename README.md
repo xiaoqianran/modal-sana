@@ -108,7 +108,7 @@ uv run modal-sana web
 uv run modal-sana models
 uv run modal-sana prefetch                 # CPU 下载常用 1024 模型（不含 2K/4K）
 uv run modal-sana prefetch sana-sprint-1.6b
-uv run modal-sana prefetch --all
+uv run modal-sana prefetch --all           # 含 2K/4K；远程镜像缺这两个 id 会自动 redeploy
 uv run modal-sana prefetch --status
 uv run modal-sana gpus
 uv run modal-sana benchmark --gpu L40S,RTX-PRO-6000 --count 8

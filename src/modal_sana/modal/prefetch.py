@@ -8,7 +8,7 @@ from modal_sana.modal.image import download_image
 from modal_sana.modal.volumes import CACHE_DIR, huggingface_cache_volume
 from modal_sana.modal.secrets import hf_token
 from modal_sana.modal.weights import download_model_weights, list_ready_models
-from modal_sana.models.sana.registry import get_model
+from modal_sana.models.sana.registry import get_model, list_models
 
 MINUTES = 60
 
@@ -43,3 +43,14 @@ def list_volume_models() -> list[dict[str, Any]]:
     """See which SANA snapshots are already on the Volume."""
     huggingface_cache_volume().reload()
     return list_ready_models()
+
+
+@app.function(
+    image=download_image,
+    cpu=0.125,
+    timeout=60,
+    scaledown_window=10,
+)
+def registered_model_ids() -> list[str]:
+    """Model ids baked into this deployed image. No Volume I/O."""
+    return [spec.id for spec in list_models()]

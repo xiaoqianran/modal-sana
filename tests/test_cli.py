@@ -35,7 +35,8 @@ def test_models_and_jobs(tmp_path: Path, monkeypatch) -> None:
     help_prefetch = runner.invoke(app, ["prefetch", "--help"])
     assert help_prefetch.exit_code == 0, help_prefetch.output
     assert "CPU" in help_prefetch.output or "Volume" in help_prefetch.output
-    assert "every" in help_prefetch.output.lower() or "all" in help_prefetch.output.lower()
+    assert "--all" in help_prefetch.output
+    assert "1024" in help_prefetch.output or "base" in help_prefetch.output.lower()
     assert "--ephemeral" in help_prefetch.output
     help_gen = runner.invoke(app, ["generate", "--help"])
     assert help_gen.exit_code == 0, help_gen.output
