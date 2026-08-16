@@ -153,6 +153,20 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: 0.0
 .check { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .ok { color: var(--sage); }
 .bad { color: var(--clay); }
+.muted { color: var(--muted); }
+h2.section { font-family: Fraunces, serif; font-size: 22px; margin: 28px 0 12px; }
+a { color: var(--amber); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.timeline { display: grid; gap: 6px; }
+.span {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) 80px 70px 140px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
 
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }

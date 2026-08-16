@@ -26,6 +26,10 @@ def test_create_and_run_dry(service: JobService) -> None:
     assert page.total == 3
     assert page.items[0].seed in {10, 11, 12}
     assert (service.settings.outputs_dir / job.id / "metadata.jsonl").exists()
+    assert final.cost_usd == 0
+    page_item = page.items[0]
+    assert page_item.infer_ms is not None
+    assert page_item.cost_usd == 0
 
 
 def test_deduplicate(service: JobService) -> None:

@@ -23,6 +23,19 @@ CLI 和 Web 共用同一套 Core。第一版不包含桌面 EXE（以后用 Taur
 
 本地 Scheduler 只做三件事：展开 Prompt×N、按分辨率/步数切 GPU batch、把结果落盘并推 SSE。真正的扩缩容交给 Modal。
 
+每一张图都要能定位到 Modal 调用，并估出这一分钱花在哪：
+
+```text
+job.create
+job.run
+  ├─ modal.map                 wall clock of .map()
+  │    └─ modal.generate       function_call_id + input_id + container
+  │         load / infer / encode   GPU seconds × list $/s
+  └─ persist.image             local disk + SQLite
+```
+
+`modal-sana trace JOB` 打调用树，`modal-sana cost JOB` 打每张图的 load/infer/encode 和美分级估价。Web 的 Job 详情页同一套数据。估价用 `src/modal_sana/modal/gpu.py` 的公开标价，**不含** image build CPU 和 scaledown 空转；对账用 `modal billing report`。
+
 ```text
 CLI / Web
     ↓
@@ -52,6 +65,16 @@ uv run modal setup          # 只需一次，写入 Modal token
 uv run modal-sana doctor
 ```
 
+依赖是 `modal[api-proxy-support]`，本地 HTTP CONNECT / SOCKS 代理走标准环境变量：
+
+```bash
+export HTTPS_PROXY=http://127.0.0.1:7890
+# 或 ALL_PROXY=socks5://127.0.0.1:1080
+uv run modal-sana doctor          # 会显示 extra 是否装齐、当前代理
+```
+
+关掉代理：`MODAL_DISABLE_API_PROXY=1`。
+
 没有 Modal 账号时，所有命令都可以加 `--dry-run`：本地生成带 Prompt 的占位图，用来跑通 Gallery / Job / Resume。
 
 ## CLI
@@ -69,6 +92,8 @@ uv run modal-sana batch examples/prompts.jsonl --batch-size 8 --workers 4
 # 任务
 uv run modal-sana jobs
 uv run modal-sana job job_01K...
+uv run modal-sana trace job_01K...
+uv run modal-sana cost job_01K...
 uv run modal-sana resume job_01K...
 
 # 本地工作台
@@ -107,7 +132,7 @@ MODAL_SANA_DEPLOYED=1 uv run modal-sana generate "a white cat"
 
 ```text
 data/
-├── modal-sana.db          # Job / PromptTask / Generation / Image
+├── modal-sana.db          # Job / PromptTask / Generation / Image / TraceSpan
 └── outputs/
     └── job_01K.../
         ├── 000001.webp
@@ -130,3 +155,5 @@ uv run pytest
 ```
 
 Modal 相关代码只在 `src/modal_sana/modal/`。Core 只依赖 `ImageGenerator`，测试用 `MockGenerator`，不需要 GPU 或 token。
+
+Agent 技能来自 [modal-auto-research-skills](https://github.com/modal-projects/modal-auto-research-skills.git)，已放到 `.claude/skills/`。见 `AGENTS.md`。

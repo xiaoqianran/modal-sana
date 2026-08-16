@@ -99,6 +99,80 @@ function formPayload(form) {
   };
 }
 
+function formatUsd(amount) {
+  if (amount == null) return "—";
+  const cents = amount * 100;
+  if (amount < 0.01) return `$${amount.toFixed(6)} (${cents.toFixed(3)}¢)`;
+  return `$${amount.toFixed(4)} (${cents.toFixed(2)}¢)`;
+}
+
+function formatMs(ms) {
+  if (ms == null) return "—";
+  return `${(ms / 1000).toFixed(3)}s`;
+}
+
+async function jobDetailPage(jobId) {
+  const detail = await api(`/api/jobs/${jobId}`);
+  const job = detail.job;
+  const tree = detail.trace_tree || [];
+  main.innerHTML = `
+    <h1>Job</h1>
+    <p class="lede">Localize every Modal call and every estimated cent. Times are wall / GPU; $ is list price × charged GPU seconds.</p>
+    <div class="panel">
+      <div class="check"><span>ID</span><span class="mono">${job.id}</span></div>
+      <div class="check"><span>Status</span><span class="pill ${job.status}">${job.status}</span></div>
+      <div class="check"><span>GPU / model</span><span>${job.gpu} · ${job.model}</span></div>
+      <div class="check"><span>Images</span><span>${job.completed_images}/${job.total_images}</span></div>
+      <div class="check"><span>GPU seconds</span><span class="mono">${(job.gpu_seconds || 0).toFixed(4)}</span></div>
+      <div class="check"><span>Estimated cost</span><span class="mono">${formatUsd(job.cost_usd)}</span></div>
+      <div class="check"><span>Modal app</span><span class="mono">${job.modal_app_id || "—"}</span></div>
+      <div class="check"><span>Run</span>${job.modal_run_url ? `<a href="${job.modal_run_url}" target="_blank" rel="noreferrer">${job.modal_run_url}</a>` : "<span>—</span>"}</div>
+      <p class="lede" style="margin:16px 0 0">${detail.cost?.notes || ""}</p>
+      <div class="actions" style="margin-top:16px">
+        <button class="ghost" id="to-gallery">Gallery</button>
+        <button class="ghost" id="to-jobs">All jobs</button>
+      </div>
+    </div>
+    <h2 class="section">Call chain</h2>
+    <div class="panel timeline">${renderTree(tree)}</div>
+    <h2 class="section">Generations</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th>ID</th><th>STATUS</th><th>LOAD</th><th>INFER</th><th>ENCODE</th><th>GPU-S</th><th>$</th><th>INPUT</th></tr></thead>
+        <tbody>
+          ${(detail.generations || []).map((item) => `
+            <tr>
+              <td class="mono">${item.id}</td>
+              <td><span class="pill ${item.status}">${item.status}</span></td>
+              <td>${item.load_ms != null ? item.load_ms.toFixed(0) + "ms" : "—"}</td>
+              <td>${item.infer_ms != null ? item.infer_ms.toFixed(0) + "ms" : "—"}</td>
+              <td>${item.encode_ms != null ? item.encode_ms.toFixed(0) + "ms" : "—"}</td>
+              <td class="mono">${(item.gpu_seconds || 0).toFixed(4)}</td>
+              <td class="mono">${formatUsd(item.cost_usd)}</td>
+              <td class="mono">${item.modal_input_id || "—"}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("to-gallery").onclick = () => { location.hash = `#/gallery?job=${job.id}`; };
+  document.getElementById("to-jobs").onclick = () => { location.hash = "#/jobs"; };
+}
+
+function renderTree(nodes, depth = 0) {
+  if (!nodes || !nodes.length) return "<p class=\"lede\">No spans yet.</p>";
+  return nodes.map((node) => `
+    <div class="span" style="padding-left:${depth * 18}px">
+      <span class="mono">${node.name}</span>
+      <span>${formatMs(node.duration_ms)}</span>
+      <span class="pill">${node.kind}</span>
+      <span class="mono">${node.cost_usd ? formatUsd(node.cost_usd) : ""}</span>
+      <span class="mono muted">${node.modal_input_id || node.generation_id || ""}</span>
+    </div>
+    ${renderTree(node.children || [], depth + 1)}
+  `).join("");
+}
+
 function progressBox() {
   return `<div class="progress" id="progress"><div>0 / 0</div><div class="bar"><span></span></div></div>`;
 }
@@ -244,24 +318,29 @@ async function jobsPage() {
     <p class="lede">Every generate or batch is a Job. Resume only retries the unfinished frames.</p>
     <div class="panel">
       <table>
-        <thead><tr><th>ID</th><th>STATUS</th><th>IMAGES</th><th>MODEL</th><th>GPU</th><th></th></tr></thead>
+        <thead><tr><th>ID</th><th>STATUS</th><th>IMAGES</th><th>MODEL</th><th>GPU</th><th>COST</th><th></th></tr></thead>
         <tbody>
           ${jobs.map((job) => `
             <tr>
-              <td class="mono">${job.id}</td>
+              <td class="mono"><a href="#/job/${job.id}">${job.id}</a></td>
               <td><span class="pill ${job.status}">${job.status}</span></td>
               <td>${job.completed_images}/${job.total_images}</td>
               <td>${job.model}</td>
               <td>${job.gpu}</td>
+              <td class="mono">${formatUsd(job.cost_usd)}</td>
               <td>
+                <button class="ghost" data-job="${job.id}">Trace</button>
                 <button class="ghost" data-gallery="${job.id}">Gallery</button>
                 <button class="ghost" data-resume="${job.id}">Resume</button>
               </td>
-            </tr>`).join("") || `<tr><td colspan="6">No jobs yet.</td></tr>`}
+            </tr>`).join("") || `<tr><td colspan="7">No jobs yet.</td></tr>`}
         </tbody>
       </table>
     </div>
   `;
+  main.querySelectorAll("[data-job]").forEach((button) => {
+    button.onclick = () => { location.hash = `#/job/${button.dataset.job}`; };
+  });
   main.querySelectorAll("[data-gallery]").forEach((button) => {
     button.onclick = () => { location.hash = `#/gallery?job=${button.dataset.gallery}`; };
   });
@@ -304,7 +383,7 @@ async function galleryPage(params) {
           <div class="cap">${image.prompt}</div>
           <div class="hover">
             <div>${image.prompt}</div>
-            <div class="mono" style="margin-top:10px">seed ${image.seed}<br>${image.model}<br>${image.gpu}<br>${image.latency_ms ? (image.latency_ms / 1000).toFixed(2) + "s" : ""}</div>
+            <div class="mono" style="margin-top:10px">seed ${image.seed}<br>${image.model}<br>${image.gpu}<br>${image.latency_ms ? (image.latency_ms / 1000).toFixed(2) + "s" : ""}<br>${formatUsd(image.cost_usd)}</div>
           </div>
         </article>`).join("") || "<p>No images yet. Generate something.</p>"}
     </div>
@@ -354,7 +433,11 @@ async function openLightbox(imageId) {
         <dt>Steps</dt><dd>${image.steps}</dd>
         <dt>Size</dt><dd>${image.width} × ${image.height}</dd>
         <dt>Time</dt><dd>${image.latency_ms ? (image.latency_ms / 1000).toFixed(2) + "s" : "—"}</dd>
-        <dt>Job</dt><dd class="mono">${image.job_id}</dd>
+        <dt>Infer</dt><dd>${image.infer_ms != null ? image.infer_ms.toFixed(0) + " ms" : "—"}</dd>
+        <dt>Cost</dt><dd>${formatUsd(image.cost_usd)}</dd>
+        <dt>Call</dt><dd class="mono">${image.modal_function_call_id || "—"}</dd>
+        <dt>Input</dt><dd class="mono">${image.modal_input_id || "—"}</dd>
+        <dt>Job</dt><dd class="mono"><a href="#/job/${image.job_id}">${image.job_id}</a></dd>
       </dl>
       <div class="actions" style="margin-top:18px">
         <button id="copy">Copy prompt</button>
@@ -427,12 +510,13 @@ async function render(forced) {
   const page = forced || pageName || "generate";
   const params = new URLSearchParams(query || "");
   document.querySelectorAll("nav a").forEach((link) => {
-    link.classList.toggle("active", link.dataset.page === page);
+    link.classList.toggle("active", link.dataset.page === page || (page.startsWith("job/") && link.dataset.page === "jobs"));
   });
   if (!state.meta) state.meta = await api("/api/meta");
   if (page === "generate") generatePage(state.meta);
   else if (page === "batch") batchPage(state.meta);
   else if (page === "jobs") await jobsPage();
+  else if (page.startsWith("job/")) await jobDetailPage(page.slice(4));
   else if (page === "gallery") await galleryPage(params);
   else if (page === "benchmark") benchmarkPage(state.meta);
   else if (page === "settings") await settingsPage(state.meta);

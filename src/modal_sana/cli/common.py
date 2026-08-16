@@ -10,6 +10,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 from rich.table import Table
 
 from modal_sana.core.config import Settings, load_settings
+from modal_sana.core.cost import format_usd
 from modal_sana.core.events import Event
 from modal_sana.core.jobs import JobService
 from modal_sana.schemas.job import JobConfig, JobSummary
@@ -172,7 +173,9 @@ def _handle_event(progress: Progress, task_id: int, event: Event) -> None:
         done = int(prog.get("completed") or 0)
         total = int(prog.get("total") or 0)
         progress.update(task_id, completed=done, total=total or None, description="Generating")
-        console.print(f"[green]✓[/green] image {done}/{total or '?'}")
+        running = payload.get("cost_usd")
+        extra = f"  {format_usd(running)}" if running else ""
+        console.print(f"[green]✓[/green] image {done}/{total or '?'}{extra}")
     elif event.type == "image.failed":
         console.print(f"[red]✗[/red] {payload.get('error', 'failed')}")
     elif event.type == "job.failed":
@@ -189,7 +192,15 @@ def _print_footer(svc: JobService, job: JobSummary) -> None:
             console.print(job.error)
     else:
         console.print(f"{job.status}: {job.completed_images}/{job.total_images}")
+    if job.cost_usd is not None:
+        seconds = job.gpu_seconds or 0.0
+        console.print(
+            f"cost ≈ {format_usd(job.cost_usd)}  ·  {seconds:.3f}s GPU on {job.gpu}"
+        )
+    if job.modal_run_url:
+        console.print(job.modal_run_url)
     console.print(f"saved → {svc.settings.outputs_dir / job.id}/")
+    console.print(f"trace → modal-sana trace {job.id}")
 
 
 def jobs_table(jobs: list[JobSummary]) -> Table:
@@ -199,6 +210,7 @@ def jobs_table(jobs: list[JobSummary]) -> Table:
     table.add_column("IMAGES")
     table.add_column("MODEL")
     table.add_column("GPU")
+    table.add_column("COST")
     for job in jobs:
         table.add_row(
             job.id,
@@ -206,5 +218,6 @@ def jobs_table(jobs: list[JobSummary]) -> Table:
             f"{job.completed_images}/{job.total_images}",
             job.model,
             job.gpu,
+            format_usd(job.cost_usd) if job.cost_usd is not None else "—",
         )
     return table

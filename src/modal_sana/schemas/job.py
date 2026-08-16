@@ -80,3 +80,7 @@ class JobSummary(BaseModel):
     dry_run: bool = False
     error: str | None = None
     config: JobConfig
+    gpu_seconds: float | None = None
+    cost_usd: float | None = None
+    modal_app_id: str | None = None
+    modal_run_url: str | None = None

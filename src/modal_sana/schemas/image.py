@@ -23,6 +23,13 @@ class ImageRecord(BaseModel):
     format: str
     byte_size: int
     latency_ms: float | None = None
+    cost_usd: float | None = None
+    infer_ms: float | None = None
+    load_ms: float | None = None
+    encode_ms: float | None = None
+    gpu_seconds: float | None = None
+    modal_function_call_id: str | None = None
+    modal_input_id: str | None = None
     created_at: datetime
 
 

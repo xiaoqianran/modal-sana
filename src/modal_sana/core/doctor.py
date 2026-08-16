@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 
 @dataclass
@@ -51,6 +53,12 @@ def run_doctor() -> DoctorReport:
     else:
         report.add("Modal workspace", bool(token_id), workspace or "unknown until first run")
 
+    extra_ok, extra_detail = _proxy_extra()
+    report.add("modal[api-proxy-support]", extra_ok, extra_detail)
+
+    proxy_ok, proxy_detail = _proxy_env()
+    report.add("Modal API proxy", proxy_ok, proxy_detail)
+
     try:
         import urllib.request
 
@@ -84,7 +92,7 @@ def _modal_token() -> tuple[str | None, str]:
     return None, ""
 
 
-def _modal_workspace() -> str:
+def modal_workspace() -> str:
     try:
         from modal.config import config
 
@@ -95,3 +103,50 @@ def _modal_workspace() -> str:
     except Exception:
         return ""
     return ""
+
+
+def _modal_workspace() -> str:
+    return modal_workspace()
+
+
+def _proxy_extra() -> tuple[bool, str]:
+    missing: list[str] = []
+    try:
+        import python_socks  # noqa: F401
+    except Exception:
+        missing.append("python-socks")
+    try:
+        import aiohttp_socks  # noqa: F401
+    except Exception:
+        missing.append("aiohttp-socks")
+    if missing:
+        return False, f"missing {', '.join(missing)}; install modal[api-proxy-support]"
+    return True, "python-socks + aiohttp-socks"
+
+
+def _proxy_env() -> tuple[bool, str]:
+    disabled = os.environ.get("MODAL_DISABLE_API_PROXY", "")
+    if disabled.lower() in {"1", "true", "yes"}:
+        return True, "MODAL_DISABLE_API_PROXY set — client will not use a proxy"
+    keys = (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+    )
+    found = [f"{key}={_redact_proxy(os.environ[key])}" for key in keys if os.environ.get(key)]
+    if found:
+        return True, "; ".join(found)
+    return True, "no proxy env (direct to Modal)"
+
+
+def _redact_proxy(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.username or parsed.password:
+        host = parsed.hostname or ""
+        port = f":{parsed.port}" if parsed.port else ""
+        netloc = f"{host}{port}"
+        return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+    return url

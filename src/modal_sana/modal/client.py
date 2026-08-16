@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Iterator
 from typing import Any
 
+from modal_sana.core.doctor import modal_workspace
 from modal_sana.core.generator import GenerateRequest, GenerateResult
+from modal_sana.modal.links import app_run_url
 
 
 class ModalSanaGenerator:
     """Thin adapter. Core never talks to Modal APIs directly."""
+
+    def __init__(self) -> None:
+        self.last_meta: dict[str, Any] = {}
 
     def generate_batches(
         self,
@@ -45,31 +51,79 @@ class ModalSanaGenerator:
             options["secrets"] = secrets
 
         use_deployed = deployed or os.environ.get("MODAL_SANA_DEPLOYED") == "1"
+        started = time.perf_counter()
         if use_deployed:
             cls = modal.Cls.from_name(
                 os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
                 "SanaWorker",
             )
             worker = cls.with_options(**options)(model_id=model)
-            yield from _iter_results(worker, payloads)
+            yield from _iter_results(worker, payloads, meta=self.last_meta)
+            self.last_meta.update(
+                {
+                    "deployed": True,
+                    "app_name": os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
+                    "map_wall_ms": (time.perf_counter() - started) * 1000,
+                    "gpu": gpu,
+                    "model": model,
+                }
+            )
             return
 
         with modal.enable_output():
             with app.run():
+                self.last_meta["modal_app_id"] = app.app_id
+                self.last_meta["modal_run_url"] = app_run_url(app.app_id, modal_workspace())
                 worker = SanaWorker.with_options(**options)(model_id=model)
-                yield from _iter_results(worker, payloads)
+                yield from _iter_results(worker, payloads, meta=self.last_meta)
+        self.last_meta.update(
+            {
+                "deployed": False,
+                "map_wall_ms": (time.perf_counter() - started) * 1000,
+                "gpu": gpu,
+                "model": model,
+            }
+        )
 
 
-def _iter_results(worker: Any, payloads: list[dict[str, Any]]) -> Iterator[GenerateResult]:
+def _iter_results(
+    worker: Any,
+    payloads: list[dict[str, Any]],
+    *,
+    meta: dict[str, Any],
+) -> Iterator[GenerateResult]:
     for batch_result in worker.generate_batch.map(
         payloads,
         order_outputs=False,
         return_exceptions=True,
     ):
         if isinstance(batch_result, Exception):
-            yield GenerateResult(generation_id="", error=str(batch_result))
+            yield GenerateResult(
+                generation_id="",
+                error=str(batch_result),
+                telemetry={"modal_app_id": meta.get("modal_app_id")},
+            )
             continue
+        batch_ids = {
+            "modal_function_call_id": batch_result.get("modal_function_call_id"),
+            "modal_input_id": batch_result.get("modal_input_id"),
+            "container": batch_result.get("container") or {},
+            "modal_app_id": meta.get("modal_app_id"),
+        }
         for item in batch_result.get("items", []):
+            telemetry = {
+                **batch_ids,
+                "load_ms": item.get("load_ms"),
+                "infer_ms": item.get("infer_ms"),
+                "encode_ms": item.get("encode_ms"),
+                "gpu_seconds": item.get("gpu_seconds"),
+                "cold_start": bool(item.get("cold_start")),
+                "vram_allocated_mb": item.get("vram_allocated_mb"),
+                "modal_function_call_id": item.get("modal_function_call_id")
+                or batch_ids["modal_function_call_id"],
+                "modal_input_id": item.get("modal_input_id") or batch_ids["modal_input_id"],
+                "container": item.get("container") or batch_ids["container"],
+            }
             yield GenerateResult(
                 generation_id=item["generation_id"],
                 image_bytes=item.get("image_bytes"),
@@ -77,4 +131,5 @@ def _iter_results(worker: Any, payloads: list[dict[str, Any]]) -> Iterator[Gener
                 height=item.get("height") or 0,
                 latency_ms=float(item.get("latency_ms") or 0),
                 error=item.get("error"),
+                telemetry=telemetry,
             )

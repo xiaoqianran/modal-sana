@@ -8,7 +8,7 @@ from modal_sana.core.doctor import run_doctor
 
 
 def doctor() -> None:
-    """Check local Python, Modal SDK, and authentication."""
+    """Check local Python, Modal SDK, api-proxy-support extra, and authentication."""
     report = run_doctor()
     table = Table(title="modal-sana doctor")
     table.add_column("CHECK")

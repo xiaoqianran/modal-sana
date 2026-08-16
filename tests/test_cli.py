@@ -32,3 +32,20 @@ def test_models_and_jobs(tmp_path: Path, monkeypatch) -> None:
     assert runner.invoke(app, ["gpus"]).exit_code == 0
     listed = runner.invoke(app, ["jobs"])
     assert listed.exit_code == 0
+
+
+def test_trace_and_cost(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("MODAL_SANA_DATA_DIR", str(tmp_path / "data"))
+    created = runner.invoke(app, ["generate", "a white cat", "--dry-run", "-n", "1", "--seed", "1"])
+    assert created.exit_code == 0, created.output
+    job_id = None
+    for line in created.output.splitlines():
+        if "Submitted job:" in line:
+            job_id = line.split()[-1]
+    assert job_id
+    traced = runner.invoke(app, ["trace", job_id])
+    assert traced.exit_code == 0, traced.output
+    assert "job.run" in traced.output
+    priced = runner.invoke(app, ["cost", job_id])
+    assert priced.exit_code == 0, priced.output
+    assert "estimated cost" in priced.output.lower() or "$" in priced.output
