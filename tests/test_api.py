@@ -50,3 +50,49 @@ def test_meta_and_health() -> None:
     meta = client.get("/api/meta").json()
     assert any(model["id"] == "sana-sprint-1.6b" for model in meta["models"])
     assert any(gpu["id"] == "L40S" for gpu in meta["gpus"])
+    assert any(gpu["id"] == "H100" and gpu["usd_per_second"] > 0 for gpu in meta["gpus"])
+
+
+def test_forecast_endpoint(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MODAL_SANA_DATA_DIR", str(tmp_path / "data"))
+    api.configure(Settings(data_dir=tmp_path / "data"))
+    monkeypatch.setattr("modal_sana.web.api.load_dict_events", lambda refresh=False: [])
+    monkeypatch.setattr(
+        "modal_sana.web.api.safe_query_shared_ledger",
+        lambda **kwargs: {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "per_page": 20,
+            "pages": 1,
+            "summary": {"total_cost_usd": 0, "load_cost_usd": 0, "generate_cost_usd": 0},
+            "snapshots": {},
+            "periods": [],
+            "source": {},
+        },
+    )
+    monkeypatch.setattr(
+        "modal_sana.web.api.workspace_balance",
+        lambda: {
+            "ok": True,
+            "remaining_usd": 27.36,
+            "metered_usd": 2.64,
+            "billed_usd": 0.0,
+            "credits_applied_usd": 2.64,
+            "notes": "test",
+        },
+    )
+    client = TestClient(app)
+    response = client.get(
+        "/api/cost/forecast",
+        params={"model": "sana-1.5-4.8b", "gpu": "H100", "count": 2, "width": 1024, "height": 1024},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["predict"]["gpu"] == "H100"
+    assert body["predict"]["model"] == "sana-1.5-4.8b"
+    assert body["predict"]["load"]["usd"] > 0
+    assert body["predict"]["generate"]["usd"] > 0
+    assert body["balance"]["remaining_usd"] == 27.36
+    bad = client.get("/api/cost/forecast", params={"gpu": "not-a-gpu"})
+    assert bad.status_code == 400

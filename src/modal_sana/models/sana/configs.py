@@ -13,6 +13,8 @@ SANA_MODELS: tuple[ModelSpec, ...] = (
         default_guidance=4.5,
         recommended_dtype="bfloat16",
         description="Default. 1-4 step distilled SANA, ~0.3s/image on a fast GPU.",
+        min_vram_gb=16,
+        recommended_gpu="L40S",
     ),
     ModelSpec(
         id="sana-sprint-0.6b",
@@ -24,6 +26,8 @@ SANA_MODELS: tuple[ModelSpec, ...] = (
         default_guidance=4.5,
         recommended_dtype="bfloat16",
         description="Smaller Sprint variant. Fastest and cheapest.",
+        min_vram_gb=16,
+        recommended_gpu="L40S",
     ),
     ModelSpec(
         id="sana-1.6b",
@@ -35,6 +39,8 @@ SANA_MODELS: tuple[ModelSpec, ...] = (
         default_guidance=4.5,
         recommended_dtype="bfloat16",
         description="Original SANA 1.6B. Higher quality, more steps.",
+        min_vram_gb=24,
+        recommended_gpu="L40S",
     ),
     ModelSpec(
         id="sana-1.5-1.6b",
@@ -46,6 +52,8 @@ SANA_MODELS: tuple[ModelSpec, ...] = (
         default_guidance=4.5,
         recommended_dtype="bfloat16",
         description="SANA 1.5 1.6B with improved alignment.",
+        min_vram_gb=24,
+        recommended_gpu="L40S",
     ),
     ModelSpec(
         id="sana-1.5-4.8b",
@@ -57,5 +65,7 @@ SANA_MODELS: tuple[ModelSpec, ...] = (
         default_guidance=4.5,
         recommended_dtype="bfloat16",
         description="Largest SANA 1.5. Needs a bigger GPU (L40S / PRO 6000 / H100).",
+        min_vram_gb=40,
+        recommended_gpu="L40S",
     ),
 )

@@ -443,6 +443,7 @@ class JobService:
                                     "generation_id": generation.id,
                                     "progress": self._progress(job_id),
                                     "cost_usd": self.get_job(job_id).cost_usd,
+                                    **_runtime_fields(result.telemetry),
                                 },
                             )
                         )
@@ -525,6 +526,8 @@ class JobService:
             model=generation.model,
             image_format=generation.image_format,
             quality=generation.quality,
+            job_id=generation.job_id,
+            requested_gpu=generation.gpu,
         )
 
     def _persist_success(self, generation: GenerationRow, result: Any) -> None:
@@ -648,7 +651,11 @@ class JobService:
         elif dry:
             cost = 0.0
         else:
-            cost = cost_for_seconds(row.gpu, gpu_seconds)
+            billed_gpu = tel.get("actual_gpu") or row.gpu
+            try:
+                cost = cost_for_seconds(str(billed_gpu), gpu_seconds)
+            except ValueError:
+                cost = cost_for_seconds(row.gpu, gpu_seconds)
 
         prev_seconds = row.gpu_seconds or 0.0
         prev_cost = row.cost_usd or 0.0
@@ -718,7 +725,39 @@ def _maybe_float(value: Any) -> float | None:
         return None
 
 
+def _parse_extra(raw: str | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _runtime_fields(tel: dict[str, Any] | None) -> dict[str, Any]:
+    data = tel or {}
+    applied = data.get("applied") if isinstance(data.get("applied"), dict) else {}
+    out: dict[str, Any] = {}
+    for key in (
+        "actual_gpu",
+        "actual_device",
+        "requested_gpu",
+        "gpu_match",
+        "loaded_model",
+        "requested_model",
+        "model_match",
+    ):
+        value = data.get(key)
+        if value is None:
+            value = applied.get(key)
+        if value is not None:
+            out[key] = value
+    return out
+
+
 def _image_record(image: ImageRow, generation: GenerationRow) -> ImageRecord:
+    runtime = _runtime_fields(_parse_extra(generation.extra_json))
     return ImageRecord(
         id=image.id,
         generation_id=image.generation_id,
@@ -745,6 +784,9 @@ def _image_record(image: ImageRow, generation: GenerationRow) -> ImageRecord:
         modal_function_call_id=generation.modal_function_call_id,
         modal_input_id=generation.modal_input_id,
         created_at=image.created_at,
+        actual_gpu=runtime.get("actual_gpu"),
+        actual_device=runtime.get("actual_device"),
+        gpu_match=runtime.get("gpu_match"),
     )
 
 
@@ -764,4 +806,5 @@ def _generation_dict(item: GenerationRow) -> dict[str, Any]:
         "modal_function_call_id": item.modal_function_call_id,
         "modal_input_id": item.modal_input_id,
         "vram_allocated_mb": item.vram_allocated_mb,
+        **_runtime_fields(_parse_extra(item.extra_json)),
     }

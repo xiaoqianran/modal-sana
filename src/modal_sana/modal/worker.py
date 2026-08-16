@@ -1,13 +1,16 @@
 import os
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import modal
 
-from modal_sana.core.cost import item_gpu_seconds
+from modal_sana.core.cost import cost_for_seconds, item_gpu_seconds
 from modal_sana.modal.app import app
 from modal_sana.modal.image import image
+from modal_sana.modal.ledger import archive_cost_events, list_cost_events, record_cost_events
 from modal_sana.modal.prefetch import list_volume_models, prefetch_model
+from modal_sana.modal.runtime import probe_runtime
 from modal_sana.modal.volumes import CACHE_DIR, huggingface_cache_volume
 from modal_sana.modal.weights import assert_model_ready
 from modal_sana.models.sana.registry import get_model
@@ -67,8 +70,9 @@ class SanaWorker:
     This class only loads from ``/cache/models/{id}`` with
     ``local_files_only=True`` — it never downloads from Hugging Face.
 
-    GPU type and max_containers are applied at the call site with
-    `SanaWorker.with_options(gpu=..., max_containers=...)`.
+    GPU type and max_containers MUST be applied at the call site with
+    `SanaWorker.with_options(gpu=..., max_containers=...)`. The ``gpu="L40S"``
+    on this decorator is only the fallback if a caller forgets with_options.
     After the last input, Modal may keep this container (GPU + its CPU)
     idle for ``SCALEDOWN_SECONDS`` then scale to zero.
     """
@@ -82,6 +86,10 @@ class SanaWorker:
         self.pipe = _load_pipeline(self.model_id)
         self._load_ms = (time.perf_counter() - started) * 1000
         self._calls = 0
+        self._runtime = probe_runtime(
+            requested_model=self.model_id,
+            loaded_model=self.model_id,
+        )
 
     @modal.method()
     def generate_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -109,6 +117,13 @@ class SanaWorker:
         self._calls += 1
         n_all = max(len(items), 1)
         load_ms = float(getattr(self, "_load_ms", 0.0) or 0.0)
+        runtime = probe_runtime(
+            requested_gpu=payload.get("requested_gpu") or (items[0].get("requested_gpu") if items else None),
+            requested_model=self.model_id,
+            loaded_model=self.model_id,
+        )
+        if getattr(self, "_runtime", None):
+            runtime = {**self._runtime, **{k: v for k, v in runtime.items() if v is not None}}
 
         for (width, height, steps, guidance, image_format, quality), group in grouped.items():
             try:
@@ -180,7 +195,9 @@ class SanaWorker:
                     }
                 )
             torch.cuda.empty_cache()
-        return {"items": results, **ids}
+        _stamp_applied(results, items, runtime, self.model_id)
+        _publish_cost_events(results, items, runtime, cold=cold, load_ms=load_ms, ids=ids)
+        return {"items": results, "runtime": runtime, **ids}
 
     def _infer_group(self, group: list[dict[str, Any]], width: int, height: int, steps: int, guidance: float):
         import torch
@@ -232,6 +249,127 @@ class SanaWorker:
             return images
 
 
+def _stamp_applied(
+    results: list[dict[str, Any]],
+    items: list[dict[str, Any]],
+    runtime: dict[str, Any],
+    loaded_model: str,
+) -> None:
+    by_id = {item.get("generation_id"): item for item in items}
+    for row in results:
+        item = by_id.get(row.get("generation_id")) or {}
+        requested_model = item.get("model") or loaded_model
+        row["runtime"] = runtime
+        row["applied"] = {
+            "model": loaded_model,
+            "requested_model": requested_model,
+            "model_match": requested_model == loaded_model,
+            "requested_gpu": runtime.get("requested_gpu") or item.get("requested_gpu"),
+            "actual_gpu": runtime.get("actual_gpu"),
+            "actual_device": runtime.get("actual_device"),
+            "gpu_match": runtime.get("gpu_match"),
+            "width": row.get("width") or item.get("width"),
+            "height": row.get("height") or item.get("height"),
+            "steps": item.get("steps"),
+            "guidance": item.get("guidance"),
+            "seed": item.get("seed"),
+        }
+
+
+def _publish_cost_events(
+    results: list[dict[str, Any]],
+    items: list[dict[str, Any]],
+    runtime: dict[str, Any],
+    *,
+    cold: bool,
+    load_ms: float,
+    ids: dict[str, Any],
+) -> None:
+    if not results:
+        return
+    billed = runtime.get("actual_gpu") or runtime.get("requested_gpu") or "L40S"
+    now = datetime.now(timezone.utc).isoformat()
+    events: list[dict[str, Any]] = []
+    first = items[0] if items else {}
+    if cold and load_ms > 0:
+        load_s = load_ms / 1000.0
+        load_id = ids.get("modal_input_id") or ids.get("modal_function_call_id") or first.get("generation_id")
+        events.append(
+            {
+                "id": f"evt_{load_id}_gpu_load",
+                "ts": now,
+                "kind": "gpu_load",
+                "job_id": first.get("job_id"),
+                "generation_id": first.get("generation_id"),
+                "model": runtime.get("loaded_model") or first.get("model"),
+                "requested_gpu": runtime.get("requested_gpu"),
+                "actual_gpu": runtime.get("actual_gpu"),
+                "actual_device": runtime.get("actual_device"),
+                "gpu_seconds": load_s,
+                "cost_usd": _safe_cost(billed, load_s),
+                "load_ms": load_ms,
+                "cold_start": True,
+                "gpu_match": runtime.get("gpu_match"),
+                "model_match": runtime.get("model_match"),
+                "modal_function_call_id": ids.get("modal_function_call_id"),
+                "modal_input_id": ids.get("modal_input_id"),
+                "modal_task_id": runtime.get("modal_task_id"),
+                "source": "modal-worker",
+            }
+        )
+    by_id = {item.get("generation_id"): item for item in items}
+    for row in results:
+        item = by_id.get(row.get("generation_id")) or {}
+        infer_ms = float(row.get("infer_ms") or 0.0)
+        encode_ms = float(row.get("encode_ms") or 0.0)
+        gen_s = max((infer_ms + encode_ms) / 1000.0, 0.0)
+        events.append(
+            {
+                "id": f"evt_{row.get('generation_id')}_gpu_generate",
+                "ts": now,
+                "kind": "gpu_generate",
+                "job_id": item.get("job_id"),
+                "generation_id": row.get("generation_id"),
+                "model": runtime.get("loaded_model") or item.get("model"),
+                "requested_gpu": runtime.get("requested_gpu") or item.get("requested_gpu"),
+                "actual_gpu": runtime.get("actual_gpu"),
+                "actual_device": runtime.get("actual_device"),
+                "gpu_seconds": gen_s,
+                "cost_usd": _safe_cost(billed, gen_s),
+                "load_ms": 0.0,
+                "infer_ms": infer_ms,
+                "encode_ms": encode_ms,
+                "width": row.get("width") or item.get("width"),
+                "height": row.get("height") or item.get("height"),
+                "steps": item.get("steps"),
+                "guidance": item.get("guidance"),
+                "seed": item.get("seed"),
+                "cold_start": False,
+                "gpu_match": runtime.get("gpu_match"),
+                "model_match": runtime.get("model_match"),
+                "modal_function_call_id": ids.get("modal_function_call_id"),
+                "modal_input_id": ids.get("modal_input_id"),
+                "modal_task_id": runtime.get("modal_task_id"),
+                "source": "modal-worker",
+            }
+        )
+    try:
+        record_cost_events(events)
+    except Exception:
+        pass
+    try:
+        archive_cost_events.spawn(events)
+    except Exception:
+        pass
+
+
+def _safe_cost(gpu_id: str, seconds: float) -> float:
+    try:
+        return cost_for_seconds(gpu_id, seconds)
+    except ValueError:
+        return 0.0
+
+
 def _call_ids() -> dict[str, Any]:
     function_call_id = None
     input_id = None
@@ -266,6 +404,8 @@ def _vram_mb() -> float | None:
     return None
 
 
-# Register CPU prefetch on the same App so `modal deploy -m modal_sana.modal.worker` includes it.
+# Register CPU prefetch + ledger on the same App so `modal deploy -m modal_sana.modal.worker` includes them.
 _ = prefetch_model
 _ = list_volume_models
+_ = archive_cost_events
+_ = list_cost_events

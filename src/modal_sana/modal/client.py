@@ -2,12 +2,43 @@ from __future__ import annotations
 
 import os
 import time
+from collections import defaultdict
 from collections.abc import Iterator
 from typing import Any
 
 from modal_sana.core.doctor import modal_workspace
 from modal_sana.core.generator import GenerateRequest, GenerateResult
 from modal_sana.modal.links import app_run_url
+
+
+def build_worker_options(
+    *,
+    gpu: str,
+    workers: int,
+    retry: int,
+    model: str,
+    secrets: list[Any] | None = None,
+) -> dict[str, Any]:
+    """Runtime GPU/model bind. Class decorator ``gpu="L40S"`` is only a fallback."""
+    import modal
+
+    from modal_sana.modal.gpu import get_gpu
+    from modal_sana.modal.worker import SCALEDOWN_SECONDS
+
+    spec = get_gpu(gpu)
+    options: dict[str, Any] = {
+        "gpu": spec.modal_name,
+        "max_containers": max(workers, 1),
+        "scaledown_window": SCALEDOWN_SECONDS,
+        "retries": modal.Retries(max_retries=max(retry, 0), backoff_coefficient=2.0),
+        "env": {
+            "MODAL_SANA_REQUESTED_GPU": spec.id,
+            "MODAL_SANA_REQUESTED_MODEL": model,
+        },
+    }
+    if secrets:
+        options["secrets"] = secrets
+    return options
 
 
 class ModalSanaGenerator:
@@ -30,44 +61,41 @@ class ModalSanaGenerator:
 
         from modal_sana.modal.app import app
         from modal_sana.modal.gpu import get_gpu
-        from modal_sana.modal.worker import SCALEDOWN_SECONDS, SanaWorker
+        from modal_sana.modal.secrets import modal_download_secrets
 
         spec = get_gpu(gpu)
-        payloads = [{"items": [item.model_dump() for item in batch]} for batch in batches]
+        payloads = [_annotate_payload(batch, gpu=spec.id, model=model) for batch in batches]
         if not payloads:
             return
 
-        from modal_sana.modal.secrets import modal_download_secrets
-
         secrets = modal_download_secrets()
-
-        options: dict[str, Any] = {
-            "gpu": spec.modal_name,
-            "max_containers": max(workers, 1),
-            "scaledown_window": SCALEDOWN_SECONDS,
-            "retries": modal.Retries(max_retries=max(retry, 0), backoff_coefficient=2.0),
-        }
-        if secrets:
-            options["secrets"] = secrets
-
         use_deployed = deployed or os.environ.get("MODAL_SANA_DEPLOYED") == "1"
         started = time.perf_counter()
+        self.last_meta.update(
+            {
+                "requested_gpu": spec.id,
+                "modal_gpu": spec.modal_name,
+                "model": model,
+                "prefetch_by_model": {},
+            }
+        )
         if use_deployed:
-            prefetch_meta = _prefetch_on_cpu(model, secrets, deployed=True)
-            cls = modal.Cls.from_name(
-                os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
-                "SanaWorker",
+            yield from _dispatch(
+                payloads,
+                gpu=spec.id,
+                workers=workers,
+                retry=retry,
+                default_model=model,
+                secrets=secrets,
+                deployed=True,
+                meta=self.last_meta,
             )
-            worker = cls.with_options(**options)(model_id=model)
-            yield from _iter_results(worker, payloads, meta=self.last_meta)
             self.last_meta.update(
                 {
                     "deployed": True,
                     "app_name": os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
                     "map_wall_ms": (time.perf_counter() - started) * 1000,
                     "gpu": gpu,
-                    "model": model,
-                    "prefetch": prefetch_meta,
                 }
             )
             return
@@ -76,10 +104,16 @@ class ModalSanaGenerator:
             with app.run():
                 self.last_meta["modal_app_id"] = app.app_id
                 self.last_meta["modal_run_url"] = app_run_url(app.app_id, modal_workspace())
-                prefetch_meta = _prefetch_on_cpu(model, secrets, deployed=False)
-                self.last_meta["prefetch"] = prefetch_meta
-                worker = SanaWorker.with_options(**options)(model_id=model)
-                yield from _iter_results(worker, payloads, meta=self.last_meta)
+                yield from _dispatch(
+                    payloads,
+                    gpu=spec.id,
+                    workers=workers,
+                    retry=retry,
+                    default_model=model,
+                    secrets=secrets,
+                    deployed=False,
+                    meta=self.last_meta,
+                )
         self.last_meta.update(
             {
                 "deployed": False,
@@ -88,6 +122,62 @@ class ModalSanaGenerator:
                 "model": model,
             }
         )
+
+
+def _annotate_payload(batch: list[GenerateRequest], *, gpu: str, model: str) -> dict[str, Any]:
+    items = []
+    for item in batch:
+        data = item.model_dump()
+        data["requested_gpu"] = gpu
+        data["model"] = data.get("model") or model
+        items.append(data)
+    return {"items": items, "requested_gpu": gpu, "requested_model": model}
+
+
+def _dispatch(
+    payloads: list[dict[str, Any]],
+    *,
+    gpu: str,
+    workers: int,
+    retry: int,
+    default_model: str,
+    secrets: list[Any],
+    deployed: bool,
+    meta: dict[str, Any],
+) -> Iterator[GenerateResult]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for payload in payloads:
+        items = payload.get("items") or []
+        model_id = (items[0].get("model") if items else None) or default_model
+        grouped[str(model_id)].append(payload)
+
+    for model_id, group in grouped.items():
+        options = build_worker_options(
+            gpu=gpu,
+            workers=workers,
+            retry=retry,
+            model=model_id,
+            secrets=secrets,
+        )
+        prefetch_meta = _prefetch_on_cpu(model_id, secrets, deployed=deployed)
+        meta["prefetch"] = prefetch_meta
+        meta.setdefault("prefetch_by_model", {})[model_id] = prefetch_meta
+        worker = _make_worker(model_id, options, deployed=deployed)
+        yield from _iter_results(worker, group, meta=meta)
+
+
+def _make_worker(model: str, options: dict[str, Any], *, deployed: bool) -> Any:
+    import modal
+
+    from modal_sana.modal.worker import SanaWorker
+
+    if deployed:
+        cls = modal.Cls.from_name(
+            os.environ.get("MODAL_SANA_APP_NAME", "modal-sana"),
+            "SanaWorker",
+        )
+        return cls.with_options(**options)(model_id=model)
+    return SanaWorker.with_options(**options)(model_id=model)
 
 
 def _prefetch_on_cpu(model: str, secrets: list[Any], *, deployed: bool) -> dict[str, Any]:
@@ -130,8 +220,13 @@ def _iter_results(
             "modal_input_id": batch_result.get("modal_input_id"),
             "container": batch_result.get("container") or {},
             "modal_app_id": meta.get("modal_app_id"),
+            "runtime": batch_result.get("runtime") or {},
         }
+        if batch_result.get("runtime"):
+            meta["runtime"] = batch_result["runtime"]
         for item in batch_result.get("items", []):
+            applied = item.get("applied") or {}
+            runtime = item.get("runtime") or batch_ids["runtime"] or {}
             telemetry = {
                 **batch_ids,
                 "load_ms": item.get("load_ms"),
@@ -144,6 +239,15 @@ def _iter_results(
                 or batch_ids["modal_function_call_id"],
                 "modal_input_id": item.get("modal_input_id") or batch_ids["modal_input_id"],
                 "container": item.get("container") or batch_ids["container"],
+                "applied": applied,
+                "runtime": runtime,
+                "actual_gpu": applied.get("actual_gpu") or runtime.get("actual_gpu"),
+                "actual_device": applied.get("actual_device") or runtime.get("actual_device"),
+                "requested_gpu": applied.get("requested_gpu") or runtime.get("requested_gpu"),
+                "gpu_match": applied.get("gpu_match", runtime.get("gpu_match")),
+                "loaded_model": applied.get("model") or runtime.get("loaded_model"),
+                "requested_model": applied.get("requested_model") or runtime.get("requested_model"),
+                "model_match": applied.get("model_match", runtime.get("model_match")),
             }
             yield GenerateResult(
                 generation_id=item["generation_id"],

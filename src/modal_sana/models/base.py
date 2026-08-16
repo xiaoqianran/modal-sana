@@ -14,3 +14,5 @@ class ModelSpec:
     default_guidance: float
     recommended_dtype: str
     description: str
+    min_vram_gb: int = 16
+    recommended_gpu: str = "L40S"

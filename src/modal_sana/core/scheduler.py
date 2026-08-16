@@ -21,6 +21,8 @@ def requests_from_generations(generations: list[GenerationRow]) -> list[Generate
             model=item.model,
             image_format=item.image_format,
             quality=item.quality,
+            job_id=item.job_id,
+            requested_gpu=item.gpu,
         )
         for item in generations
     ]

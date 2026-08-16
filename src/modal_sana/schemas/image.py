@@ -31,6 +31,9 @@ class ImageRecord(BaseModel):
     modal_function_call_id: str | None = None
     modal_input_id: str | None = None
     created_at: datetime
+    actual_gpu: str | None = None
+    actual_device: str | None = None
+    gpu_match: bool | None = None
 
 
 class GalleryPage(BaseModel):

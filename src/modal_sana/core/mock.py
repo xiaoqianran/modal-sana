@@ -68,6 +68,23 @@ class MockGenerator:
                         "cost_usd": 0.0,
                         "cold_start": False,
                         "dry_run": True,
+                        "requested_gpu": gpu,
+                        "actual_gpu": gpu,
+                        "actual_device": "dry-run",
+                        "gpu_match": True,
+                        "loaded_model": request.model or model,
+                        "requested_model": request.model or model,
+                        "model_match": True,
+                        "applied": {
+                            "model": request.model or model,
+                            "requested_gpu": gpu,
+                            "actual_gpu": gpu,
+                            "width": request.width,
+                            "height": request.height,
+                            "steps": request.steps,
+                            "guidance": request.guidance,
+                            "seed": request.seed,
+                        },
                     },
                 )
         self.last_meta = {
