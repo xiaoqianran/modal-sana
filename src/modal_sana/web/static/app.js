@@ -1,6 +1,6 @@
 const main = document.getElementById("main");
 const lightbox = document.getElementById("lightbox");
-const railStatus = document.getElementById("rail-status");
+const mastStatus = document.getElementById("mast-status");
 
 const STATUS = {
   pending: "等待",
@@ -75,7 +75,7 @@ function select(name, label, options, value) {
 function gpuChoices(meta) {
   return (meta.gpus || []).map((gpu) => ({
     id: gpu.id,
-    name: `${gpu.id} · $${Number(gpu.usd_per_hour).toFixed(2)}/时 · ${gpu.vram_gb}GB`,
+    name: `${String(gpu.id).replaceAll("-", " ")} · $${Number(gpu.usd_per_hour).toFixed(2)}/时 · ${gpu.vram_gb}GB`,
   }));
 }
 
@@ -86,22 +86,36 @@ function modelChoices(meta) {
   }));
 }
 
+function isFourK(model) {
+  if (!model) return false;
+  return Number(model.native_width) >= 4096 || String(model.id || "").includes("4k");
+}
+
 function applyModelNative(form, meta) {
   const model = (meta.models || []).find((item) => item.id === form.model?.value);
   if (!model) return;
   if (form.width) form.width.value = model.native_width || 1024;
   if (form.height) form.height.value = model.native_height || 1024;
   if (form.batch_size && model.recommended_batch) form.batch_size.value = model.recommended_batch;
+  if (isFourK(model) && form.gpu) {
+    form.gpu.value = model.recommended_gpu || "RTX-PRO-6000";
+  }
 }
 
 function settingsGrid(d, meta) {
   return `
     <fieldset class="settings">
-      <legend>生成参数</legend>
-      <div class="grid">
-        ${select("model", "模型（切换会改到该权重的原生分辨率）", modelChoices(meta), d.model)}
-        ${select("gpu", "GPU（单独选；默认 L40S）", gpuChoices(meta), d.gpu)}
+      <legend>机位</legend>
+      <div class="dials">
+        ${select("model", "模型（切换会改到原生分辨率；4K 默认 RTX PRO 6000）", modelChoices(meta), d.model)}
+        ${select("gpu", "GPU（单独选；4K 默认 RTX PRO 6000）", gpuChoices(meta), d.gpu)}
         ${field("count", "张数", d.count, "number")}
+        ${select("image_format", "格式", ["png", "jpg", "webp"], d.format)}
+      </div>
+    </fieldset>
+    <details class="advanced">
+      <summary>步数、尺寸、并行</summary>
+      <div class="grid">
         ${field("width", "宽度", d.width, "number")}
         ${field("height", "高度", d.height, "number")}
         ${field("steps", "步数（空=模型默认）", d.steps)}
@@ -109,11 +123,10 @@ function settingsGrid(d, meta) {
         ${field("seed", "种子", d.seed)}
         ${field("batch_size", "GPU 批大小", d.batch_size, "number")}
         ${field("workers", "并行容器（1=只用一台 GPU）", d.workers, "number")}
-        ${select("image_format", "格式", ["png", "jpg", "webp"], d.format)}
       </div>
       ${field("dry_run", "空跑（不调用 Modal / GPU）", d.dry_run, "checkbox")}
       ${field("prefer_deployed", "优先已部署的 Modal 应用（内存快照）", d.prefer_deployed !== false, "checkbox")}
-    </fieldset>
+    </details>
   `;
 }
 
@@ -319,31 +332,29 @@ function listenJob(jobId) {
 function generatePage(meta) {
   const d = defaultsFrom(meta);
   main.innerHTML = `
-    <h1>生成</h1>
-    <p class="lede">一条提示词。这个本地网页<strong>不是</strong> <code>modal serve</code>。生成会优先走 <code>modal deploy</code> 的应用（快照开着）。还没部署时，第一次会自动 deploy。</p>
+    <h1>出图</h1>
+    <p class="lede">写一条提示词，选模型和 GPU。这是本地工作台，不是 <code>modal serve</code>。第一次没部署时会自动 deploy。</p>
     <p class="lede mono" id="runtime-line"></p>
-    <form class="panel" id="gen-form" method="post">
+    <form class="sheet" id="gen-form" method="post">
       <label for="field-prompt">提示词</label>
       <textarea id="field-prompt" name="prompt" placeholder="夜晚的东京街道，霓虹倒映在湿路面上" required autocomplete="off"></textarea>
       ${settingsGrid(d, meta)}
       <p class="apply-line mono" id="will-apply">将请求 …</p>
-      <div class="forecast" id="forecast">
-        <article class="forecast-card"><h3>纯 GPU 加载</h3><div class="mono" id="fc-load">…</div></article>
-        <article class="forecast-card"><h3>GPU 实际生成</h3><div class="mono" id="fc-gen">…</div></article>
-        <article class="forecast-card"><h3>Modal 还剩多少钱</h3><div class="mono" id="fc-bal">…</div></article>
+      <div class="meter" id="forecast">
+        <div><span>加载</span><div class="mono" id="fc-load">…</div></div>
+        <div><span>生成</span><div class="mono" id="fc-gen">…</div></div>
+        <div><span>余额</span><div class="mono" id="fc-bal">…</div></div>
       </div>
       <p class="lede" id="fc-note"></p>
       <div class="actions">
-        <button type="submit">开始生成</button>
+        <button type="submit">开始出图</button>
         <span class="mono" id="job-id"></span>
       </div>
       <div id="applied-banner"></div>
       ${progressBox()}
     </form>
-    <h2 class="section">共享 Modal 费用账本</h2>
-    <p class="lede">同一 Modal 工作区里，每台机器跑这个应用都会写到这里。周期按 UTC。</p>
-    <section class="panel" id="ledger-panel" aria-labelledby="ledger-heading">
-      <h3 class="section" id="ledger-heading">账本</h3>
+    <details class="ledger" id="ledger-panel">
+      <summary>费用账本（同一 Modal 工作区，UTC）</summary>
       <div class="snapshots" id="ledger-snaps"></div>
       <div class="toolbar">
         <label class="field" for="ledger-period">周期
@@ -367,7 +378,7 @@ function generatePage(meta) {
         <span id="ledger-page">第 1 页</span>
         <button type="button" class="ghost" id="ledger-next">下一页</button>
       </div>
-    </section>
+    </details>
   `;
   const form = document.getElementById("gen-form");
   state.ledgerPage = 1;
@@ -551,7 +562,7 @@ function batchPage(meta) {
   main.innerHTML = `
     <h1>批量</h1>
     <p class="lede">拖入 txt / jsonl / json / csv，或每行一条提示词。JSONL 是原生协议。</p>
-    <form class="panel" id="batch-form" method="post">
+    <form class="sheet" id="batch-form" method="post">
       <div class="drop" id="drop">
         <label for="field-file">把 prompts.txt / prompts.jsonl 拖到这里，或选择文件</label>
         <div style="margin-top:12px"><input id="field-file" type="file" name="file" accept=".txt,.jsonl,.json,.csv" /></div>
@@ -695,7 +706,7 @@ async function galleryPage(params) {
     <div class="gallery">
       ${data.items.map((image) => `
         <article class="card" data-id="${image.id}">
-          <img src="/api/images/${image.id}/file" alt="${escapeAttr(image.prompt)}" width="${image.width || 1024}" height="${image.height || 1024}" />
+          <img src="/api/images/${image.id}/file" alt="${escapeAttr(image.prompt)}" width="${image.width || 1024}" height="${image.height || 1024}" style="aspect-ratio:${image.width || 1024} / ${image.height || 1024}" />
           <div class="cap">${escapeHtml(image.prompt)}</div>
           <div class="hover">
             <div>${escapeHtml(image.prompt)}</div>
@@ -871,17 +882,17 @@ lightbox.addEventListener("cancel", (event) => {
     state.meta = meta;
     const ver = meta.version ? `v${meta.version} · ` : "";
     if (!doctor.ready) {
-      railStatus.textContent = `${ver}尚未登录 Modal`;
-      railStatus.className = "rail-foot bad";
+      mastStatus.textContent = `${ver}尚未登录 Modal`;
+      mastStatus.className = "mast-status bad";
     } else if (meta.runtime?.available) {
-      railStatus.textContent = `${ver}已部署 · 快照开着`;
-      railStatus.className = "rail-foot ok";
+      mastStatus.textContent = `${ver}已部署 · 快照开着`;
+      mastStatus.className = "mast-status ok";
     } else {
-      railStatus.textContent = `${ver}先部署 · ${meta.runtime?.deploy_command || "modal deploy"}`;
-      railStatus.className = "rail-foot bad";
+      mastStatus.textContent = `${ver}先部署 · ${meta.runtime?.deploy_command || "modal deploy"}`;
+      mastStatus.className = "mast-status bad";
     }
   } catch {
-    railStatus.textContent = "接口离线";
+    mastStatus.textContent = "接口离线";
   }
   await render();
 })();

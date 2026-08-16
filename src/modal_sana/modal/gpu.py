@@ -28,7 +28,7 @@ GPUS: dict[str, GPUSpec] = {
         GPUSpec("L40S", "L40S", 8, "bfloat16", 0.000542, 48, "Default. Strong price/perf"),
         GPUSpec("A100", "A100", 8, "bfloat16", 0.000583, 40, "A100 40GB"),
         GPUSpec("A100-80GB", "A100-80GB", 12, "bfloat16", 0.000694, 80, "A100 80GB"),
-        GPUSpec("RTX-PRO-6000", "RTX-PRO-6000", 16, "bfloat16", 0.000842, 96, "Blackwell workstation"),
+        GPUSpec("RTX-PRO-6000", "RTX-PRO-6000", 16, "bfloat16", 0.000842, 96, "4K default. 96GB Blackwell"),
         GPUSpec("H100", "H100", 16, "bfloat16", 0.001097, 80, "Highest Sprint throughput"),
         GPUSpec("H200", "H200", 16, "bfloat16", 0.001261, 141, "Large VRAM"),
         GPUSpec("B200", "B200", 16, "bfloat16", 0.001736, 180, "Blackwell datacenter"),

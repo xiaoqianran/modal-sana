@@ -11,20 +11,23 @@ def test_index_is_chinese_semantic_shell() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     assert 'lang="zh-CN"' in html
     assert "<nav" in html
+    assert "<header" in html
     assert 'href="#main"' in html
     assert "<dialog" in html
-    assert "Noto+Serif+SC" in html
     assert "Noto+Sans+SC" in html
+    assert "Noto+Serif+SC" not in html
 
 
-def test_styles_are_catppuccin_mocha() -> None:
+def test_styles_are_viewing_booth() -> None:
     css = (STATIC / "styles.css").read_text(encoding="utf-8")
-    assert "#1e1e2e" in css
-    assert "#cba6f7" in css
-    assert "#fab387" in css
+    assert "#215a78" in css
+    assert "#e8edf2" in css
+    assert "#b56a3a" in css
     assert "color-scheme:" in css
     assert "margin-inline" in css or "padding-inline" in css
     assert "prefers-reduced-motion" in css
+    assert "#1e1e2e" not in css
+    assert "#cba6f7" not in css
 
 
 def test_static_files_are_served() -> None:
@@ -34,7 +37,7 @@ def test_static_files_are_served() -> None:
     assert "zh-CN" in index.text
     css = client.get("/static/styles.css")
     assert css.status_code == 200
-    assert "#1e1e2e" in css.text
+    assert "#215a78" in css.text
 
 
 def test_job_table_shows_vram() -> None:
@@ -42,6 +45,14 @@ def test_job_table_shows_vram() -> None:
     assert "function formatVram" in js
     assert "vram_reserved_mb" in js
     assert ">显存<" in js or "显存" in js
+
+
+def test_four_k_defaults_to_rtx_pro_6000() -> None:
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "function isFourK" in js
+    assert "RTX-PRO-6000" in js
+    assert "recommended_gpu" in js
+    assert "native_width) >= 4096" in js
 
 
 def test_workers_default_is_one_gpu() -> None:

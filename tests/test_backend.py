@@ -23,4 +23,5 @@ def test_native_resolution_follows_checkpoint() -> None:
     assert four_k.native_width == 4096
     assert four_k.native_height == 4096
     assert four_k.recommended_batch == 1
+    assert four_k.recommended_gpu == "RTX-PRO-6000"
     assert four_k.hf_id.endswith("4Kpx_BF16_diffusers")
