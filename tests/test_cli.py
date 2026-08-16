@@ -38,6 +38,7 @@ def test_models_and_jobs(tmp_path: Path, monkeypatch) -> None:
     assert "--all" in help_prefetch.output
     assert "1024" in help_prefetch.output or "base" in help_prefetch.output.lower()
     assert "--ephemeral" in help_prefetch.output
+    assert "Complete" in help_prefetch.output or "progress" in help_prefetch.output.lower()
     help_gen = runner.invoke(app, ["generate", "--help"])
     assert help_gen.exit_code == 0, help_gen.output
     assert "--deployed" in help_gen.output

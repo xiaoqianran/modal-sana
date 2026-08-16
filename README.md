@@ -17,7 +17,7 @@ CLI 和 Web 共用同一套 Core。第一版不包含桌面 EXE（以后用 Taur
 | 万级 Prompt 并发 | 本地 for-loop 或自写分布式队列 | `SanaWorker.generate_batch.map(..., order_outputs=False)` |
 | 换 GPU | 为每种卡写一个 Function | [`with_options(gpu=...)`](https://modal.com/docs/guide/dynamic-function-config) |
 | `--workers 4` | 自己管进程池 | `with_options(max_containers=4)` |
-| 模型权重 | GPU 容器里 `from_pretrained` 边下边加载 | **CPU** `prefetch_model` 写入 Volume `/cache/models/{id}` 并 `commit()`；**GPU** 只 `local_files_only` 加载。空闲 **10s** 后 GPU 容器释放 |
+| 模型权重 | GPU 容器里 `from_pretrained` 边下边加载 | **CPU** `prefetch_model` 写入 Volume `/cache/models/{id}` 并 `commit()`；已完整的快照不再拉取。CLI 用 `prefetch_progress` 实时显示字节进度。**GPU** 只 `local_files_only` 加载。空闲 **10s** 后 GPU 容器释放 |
 | 瞬时失败 | 只在本地重试 | Modal `retries=` + 本地 Job resume |
 | 图片 | 塞进 SQLite Blob | SQLite 只存 metadata，文件在 `data/outputs/` |
 
@@ -45,7 +45,7 @@ ImageGenerator protocol
     ├── MockGenerator   (--dry-run / 测试)
     └── ModalSanaGenerator
             ↓
-        prefetch_model (CPU, Volume)
+        prefetch_model / prefetch_progress (CPU, Volume)
             ↓
         SanaWorker.with_options(gpu, max_containers).map()
 ```
@@ -106,9 +106,9 @@ uv run modal-sana web
 
 ```bash
 uv run modal-sana models
-uv run modal-sana prefetch                 # CPU 下载常用 1024 模型（不含 2K/4K）
+uv run modal-sana prefetch                 # CPU 下载常用 1024 模型（不含 2K/4K）；已完整则跳过
 uv run modal-sana prefetch sana-sprint-1.6b
-uv run modal-sana prefetch --all           # 含 2K/4K；远程镜像缺这两个 id 会自动 redeploy
+uv run modal-sana prefetch --all           # 含 2K/4K；未完成的显示实时进度
 uv run modal-sana prefetch --status
 uv run modal-sana gpus
 uv run modal-sana benchmark --gpu L40S,RTX-PRO-6000 --count 8
