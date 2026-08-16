@@ -27,7 +27,7 @@ OptWidth = Annotated[int | None, typer.Option("--width", help="Image width. Defa
 OptHeight = Annotated[int | None, typer.Option("--height", help="Image height. Default: model native.")]
 OptSeed = Annotated[int | None, typer.Option("--seed", help="Base seed; count expands +1")]
 OptBatch = Annotated[int, typer.Option("--batch-size", help="Images per GPU forward")]
-OptWorkers = Annotated[int, typer.Option("--workers", help="Concurrent Modal GPU containers")]
+OptWorkers = Annotated[int, typer.Option("--workers", help="Max parallel GPU containers. Default 1 (one GPU).")]
 OptRetry = Annotated[int, typer.Option("--retry", help="Local retries after Modal gives up")]
 OptFormat = Annotated[str, typer.Option("--format", help="png | jpg | webp")]
 OptQuality = Annotated[int, typer.Option("--quality", help="WebP/JPEG quality")]

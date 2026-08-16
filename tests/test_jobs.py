@@ -25,6 +25,7 @@ def test_job_uses_model_native_size(service: JobService) -> None:
         JobConfig(dry_run=True, seed=1),
     )
     assert sprint.config.width == 1024
+    assert sprint.config.workers == 1
     override = service.create_job(
         [PromptSpec(prompt="wide", count=1, seed=1)],
         JobConfig(model="sana-1.5-1.6b", dry_run=True, seed=1, width=768, height=512),

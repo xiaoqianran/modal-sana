@@ -21,7 +21,7 @@ class JobConfig(BaseModel):
     seed: int | None = None
     count: int = 1
     batch_size: int = 4
-    workers: int = 2
+    workers: int = 1
     retry: int = 3
     image_format: ImageFormat = "png"
     quality: int = 90

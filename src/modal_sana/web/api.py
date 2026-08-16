@@ -58,7 +58,7 @@ class CreateJobBody(BaseModel):
     guidance: float | None = None
     seed: int | None = None
     batch_size: int = 4
-    workers: int = 2
+    workers: int = 1
     retry: int = 3
     image_format: Literal["webp", "png", "jpg"] = "png"
     quality: int = 90
@@ -138,6 +138,7 @@ def meta() -> dict[str, Any]:
             "monthly_credits_usd": _settings.monthly_credits_usd,
             "prefer_deployed": True,
             "image_format": "png",
+            "workers": 1,
         },
         "runtime": inspect_deploy_target(),
         "version": __version__,
@@ -153,7 +154,7 @@ def cost_forecast(
     height: int = Query(1024, ge=256, le=4096),
     steps: int | None = Query(None, ge=1, le=200),
     batch_size: int = Query(4, ge=1, le=64),
-    workers: int = Query(2, ge=1, le=32),
+    workers: int = Query(1, ge=1, le=32),
     period: str = "day",
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=200),
@@ -249,7 +250,7 @@ async def create_job_from_file(
     guidance: float | None = None,
     seed: int | None = None,
     batch_size: int = 4,
-    workers: int = 2,
+    workers: int = 1,
     dry_run: bool = False,
     deployed: bool | None = None,
     image_format: str = "png",

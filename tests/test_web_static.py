@@ -37,6 +37,12 @@ def test_static_files_are_served() -> None:
     assert "#1e1e2e" in css.text
 
 
+def test_workers_default_is_one_gpu() -> None:
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "workers: meta?.defaults?.workers || 1" in js
+    assert "Number(data.get(\"workers\") || 1)" in js
+
+
 def test_frontend_skills_were_vendored() -> None:
     root = Path(".claude/skills")
     for name in ("html", "css", "tiny-css", "frontend-design"):
