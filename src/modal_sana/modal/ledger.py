@@ -96,6 +96,7 @@ def query_shared_ledger(
     model: str | None = None,
     gpu: str | None = None,
     include_volume: bool = True,
+    job_id: str | None = None,
 ) -> dict[str, Any]:
     """Merge Dict (live, all devices) + Volume archive (durable)."""
     groups = [load_dict_events(refresh=True)]
@@ -106,7 +107,7 @@ def query_shared_ledger(
         except Exception as exc:  # noqa: BLE001
             volume_error = f"{type(exc).__name__}: {exc}"
     events = merge_events(*groups)
-    filtered = filter_events(events, period=period, kind=kind, model=model, gpu=gpu)
+    filtered = filter_events(events, period=period, kind=kind, model=model, gpu=gpu, job_id=job_id)
     page_data = paginate(filtered, page, per_page)
     snapshots = {
         grain: summarize(filter_events(events, period=grain))  # type: ignore[arg-type]
@@ -116,7 +117,11 @@ def query_shared_ledger(
         "period": period,
         "summary": summarize(filtered),
         "snapshots": snapshots,
-        "periods": period_rows(events if period == "all" else filtered, period if period != "all" else "day"),
+        "periods": period_rows(
+            filtered if job_id else (events if period == "all" else filtered),
+            period if period != "all" else "day",
+        ),
+        "job_id": job_id,
         "source": {
             "dict": True,
             "volume": volume_error is None and include_volume,

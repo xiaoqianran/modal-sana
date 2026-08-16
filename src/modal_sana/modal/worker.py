@@ -7,6 +7,7 @@ import modal
 
 from modal_sana.core.cost import cost_for_seconds, item_gpu_seconds
 from modal_sana.modal.app import app
+from modal_sana.modal.gpu import get_gpu
 from modal_sana.modal.image import image
 from modal_sana.modal.ledger import archive_cost_events, list_cost_events, record_cost_events
 from modal_sana.modal.prefetch import (
@@ -359,6 +360,7 @@ def _publish_cost_events(
     now = datetime.now(timezone.utc).isoformat()
     events: list[dict[str, Any]] = []
     first = items[0] if items else {}
+    generation_ids = [str(item.get("generation_id")) for item in items if item.get("generation_id")]
     if cold and load_ms > 0:
         load_s = load_ms / 1000.0
         load_id = ids.get("modal_input_id") or ids.get("modal_function_call_id") or first.get("generation_id")
@@ -369,20 +371,20 @@ def _publish_cost_events(
                 "kind": "gpu_load",
                 "job_id": first.get("job_id"),
                 "generation_id": first.get("generation_id"),
+                "generation_ids": generation_ids,
                 "model": runtime.get("loaded_model") or first.get("model"),
                 "requested_gpu": runtime.get("requested_gpu"),
                 "actual_gpu": runtime.get("actual_gpu"),
                 "actual_device": runtime.get("actual_device"),
-                "gpu_seconds": load_s,
-                "cost_usd": _safe_cost(billed, load_s),
+                **_billing_fields(billed, load_s),
                 "load_ms": load_ms,
                 "cold_start": True,
+                "from_snapshot": runtime.get("from_snapshot"),
                 "gpu_match": runtime.get("gpu_match"),
                 "model_match": runtime.get("model_match"),
                 "modal_function_call_id": ids.get("modal_function_call_id"),
                 "modal_input_id": ids.get("modal_input_id"),
                 "modal_task_id": runtime.get("modal_task_id"),
-                "from_snapshot": runtime.get("from_snapshot"),
                 "vram_allocated_mb": runtime.get("vram_allocated_mb"),
                 "vram_reserved_mb": runtime.get("vram_reserved_mb"),
                 "vram_peak_mb": runtime.get("vram_peak_mb"),
@@ -402,12 +404,12 @@ def _publish_cost_events(
                 "kind": "gpu_generate",
                 "job_id": item.get("job_id"),
                 "generation_id": row.get("generation_id"),
+                "generation_ids": [str(row.get("generation_id"))] if row.get("generation_id") else [],
                 "model": runtime.get("loaded_model") or item.get("model"),
                 "requested_gpu": runtime.get("requested_gpu") or item.get("requested_gpu"),
                 "actual_gpu": runtime.get("actual_gpu"),
                 "actual_device": runtime.get("actual_device"),
-                "gpu_seconds": gen_s,
-                "cost_usd": _safe_cost(billed, gen_s),
+                **_billing_fields(billed, gen_s),
                 "load_ms": 0.0,
                 "infer_ms": infer_ms,
                 "encode_ms": encode_ms,
@@ -420,6 +422,7 @@ def _publish_cost_events(
                 "guidance": item.get("guidance"),
                 "seed": item.get("seed"),
                 "cold_start": False,
+                "from_snapshot": runtime.get("from_snapshot"),
                 "gpu_match": runtime.get("gpu_match"),
                 "model_match": runtime.get("model_match"),
                 "modal_function_call_id": ids.get("modal_function_call_id"),
@@ -436,6 +439,25 @@ def _publish_cost_events(
         archive_cost_events.spawn(events)
     except Exception:
         pass
+
+
+def _billing_fields(gpu_id: str, seconds: float) -> dict[str, Any]:
+    seconds = max(float(seconds), 0.0)
+    try:
+        spec = get_gpu(gpu_id)
+        return {
+            "gpu_seconds": seconds,
+            "usd_per_second": spec.usd_per_second,
+            "usd_per_hour": spec.usd_per_hour,
+            "cost_usd": spec.usd_per_second * seconds,
+        }
+    except ValueError:
+        return {
+            "gpu_seconds": seconds,
+            "usd_per_second": None,
+            "usd_per_hour": None,
+            "cost_usd": _safe_cost(gpu_id, seconds),
+        }
 
 
 def _safe_cost(gpu_id: str, seconds: float) -> float:

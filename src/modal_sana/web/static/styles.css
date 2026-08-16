@@ -677,6 +677,61 @@
 
   .span > * { min-inline-size: 0; }
 
+  .events {
+    padding: 0.4rem 1.1rem 0.8rem;
+  }
+
+  .event {
+    border-block-end: 1px solid var(--rule);
+    padding-block: 0.65rem;
+  }
+
+  .event:last-child {
+    border-block-end: 0;
+  }
+
+  .event summary {
+    display: grid;
+    grid-template-columns: 10.5rem 3.2rem minmax(8rem, 1.3fr) 7rem minmax(7rem, 1fr) 5.5rem 7rem;
+    gap: 0.45rem;
+    align-items: center;
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.82rem;
+  }
+
+  .event summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chain {
+    list-style: none;
+    margin: 0.7rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.28rem;
+  }
+
+  .chain li {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr) auto;
+    gap: 0.55rem;
+    font-size: 0.8rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  .meta-inline {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 0.3rem 0.7rem;
+    margin: 0.75rem 0 0;
+    font-size: 0.82rem;
+  }
+
+  .meta-inline dt {
+    color: var(--mute);
+  }
+
   @media (max-width: 64rem) {
     .dials {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -698,7 +753,9 @@
   }
 
   @media (max-width: 40rem) {
-    .span {
+    .span,
+    .event summary,
+    .chain li {
       grid-template-columns: 1fr;
       gap: 0.15rem;
     }

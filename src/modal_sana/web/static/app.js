@@ -160,6 +160,17 @@ function jobPayload(form) {
   return payload;
 }
 
+function formatRate(usdPerSecond) {
+  if (usdPerSecond == null) return "—";
+  return `$${Number(usdPerSecond).toFixed(6)}/s · $${(Number(usdPerSecond) * 3600).toFixed(2)}/时`;
+}
+
+function kindLabel(kind) {
+  if (kind === "gpu_load") return "加载";
+  if (kind === "gpu_generate") return "生成";
+  return kind || "—";
+}
+
 function formatUsd(amount) {
   if (amount == null) return "—";
   const cents = amount * 100;
@@ -216,7 +227,9 @@ async function jobDetailPage(jobId) {
       <div class="check"><span>实际 GPU</span><span>${actual?.actual_gpu || "—"} ${actual?.actual_device || ""}</span></div>
       <div class="check"><span>图片</span><span>${job.completed_images}/${job.total_images}</span></div>
       <div class="check"><span>GPU 秒</span><span class="mono">${(job.gpu_seconds || 0).toFixed(4)}</span></div>
+      <div class="check"><span>单价</span><span class="mono">${formatRate(detail.cost?.usd_per_second)}</span></div>
       <div class="check"><span>估算费用</span><span class="mono">${formatUsd(job.cost_usd)}</span></div>
+      <p class="apply-line mono">${detail.cost?.formula || ""}</p>
       <div class="check"><span>Modal 路径</span><span class="mono">${job.config?.deployed === true ? "已部署（强制）" : job.config?.deployed === false ? "一次性（强制）" : "自动"}</span></div>
       <div class="check"><span>Modal 应用</span><span class="mono">${job.modal_app_id || "—"}</span></div>
       <div class="check"><span>运行</span>${job.modal_run_url ? `<a href="${job.modal_run_url}" target="_blank" rel="noopener noreferrer">打开 Modal 运行页</a>` : "<span>—</span>"}</div>
@@ -224,6 +237,7 @@ async function jobDetailPage(jobId) {
       <div class="actions" style="margin-top:16px">
         <button type="button" class="ghost" id="to-gallery">图库</button>
         <button type="button" class="ghost" id="to-jobs">全部任务</button>
+        <button type="button" class="ghost" id="to-cost">这笔任务的费用</button>
       </div>
     </section>
     <h2 class="section">调用链</h2>
@@ -240,6 +254,7 @@ async function jobDetailPage(jobId) {
             <th scope="col">编码</th>
             <th scope="col">显存</th>
             <th scope="col">GPU 秒</th>
+            <th scope="col">$/s</th>
             <th scope="col">费用</th>
             <th scope="col">输入</th>
           </tr>
@@ -254,6 +269,7 @@ async function jobDetailPage(jobId) {
               <td>${item.encode_ms != null ? item.encode_ms.toFixed(0) + "ms" : "—"}</td>
               <td class="mono">${formatVram(item)}</td>
               <td class="mono">${(item.gpu_seconds || 0).toFixed(4)}</td>
+              <td class="mono">${formatRate((detail.cost?.by_generation || []).find((row) => row.generation_id === item.id)?.usd_per_second)}</td>
               <td class="mono">${formatUsd(item.cost_usd)}</td>
               <td class="mono">${item.modal_input_id || "—"}</td>
             </tr>`).join("")}
@@ -263,6 +279,7 @@ async function jobDetailPage(jobId) {
   `;
   document.getElementById("to-gallery").onclick = () => { location.hash = `#/gallery?job=${job.id}`; };
   document.getElementById("to-jobs").onclick = () => { location.hash = "#/jobs"; };
+  document.getElementById("to-cost").onclick = () => { location.hash = `#/cost?job=${job.id}`; };
 }
 
 function renderTree(nodes, depth = 0) {
@@ -353,36 +370,10 @@ function generatePage(meta) {
       <div id="applied-banner"></div>
       ${progressBox()}
     </form>
-    <details class="ledger" id="ledger-panel">
-      <summary>费用账本（同一 Modal 工作区，UTC）</summary>
-      <div class="snapshots" id="ledger-snaps"></div>
-      <div class="toolbar">
-        <label class="field" for="ledger-period">周期
-          <select id="ledger-period">
-            ${[["hour", "小时"], ["day", "天"], ["week", "周"], ["month", "月"], ["all", "全部"]].map(([value, label]) => `<option value="${value}" ${value === "day" ? "selected" : ""}>${label}</option>`).join("")}
-          </select>
-        </label>
-        <button type="button" class="ghost" id="ledger-refresh">刷新</button>
-      </div>
-      <table>
-        <thead><tr><th scope="col">周期</th><th scope="col">加载 $</th><th scope="col">生成 $</th><th scope="col">合计</th><th scope="col">事件</th></tr></thead>
-        <tbody id="ledger-periods"><tr><td colspan="5">加载中…</td></tr></tbody>
-      </table>
-      <h3 class="section">事件</h3>
-      <table>
-        <thead><tr><th scope="col">时间</th><th scope="col">类型</th><th scope="col">模型</th><th scope="col">GPU</th><th scope="col">显存</th><th scope="col">秒</th><th scope="col">$</th></tr></thead>
-        <tbody id="ledger-events"><tr><td colspan="7">加载中…</td></tr></tbody>
-      </table>
-      <div class="pager">
-        <button type="button" class="ghost" id="ledger-prev">上一页</button>
-        <span id="ledger-page">第 1 页</span>
-        <button type="button" class="ghost" id="ledger-next">下一页</button>
-      </div>
-    </details>
+    <p class="lede"><a href="#/cost">查看每一笔 Modal 费用和调用链</a></p>
   `;
   const form = document.getElementById("gen-form");
-  state.ledgerPage = 1;
-  const refresh = () => refreshForecast(form, state.ledgerPage);
+  const refresh = () => refreshForecast(form);
   form.addEventListener("input", () => {
     updateWillApply(form, meta);
     clearTimeout(state.forecastTimer);
@@ -393,19 +384,6 @@ function generatePage(meta) {
     updateWillApply(form, meta);
     refresh();
   });
-  document.getElementById("ledger-period").onchange = () => {
-    state.ledgerPage = 1;
-    refresh();
-  };
-  document.getElementById("ledger-refresh").onclick = refresh;
-  document.getElementById("ledger-prev").onclick = () => {
-    state.ledgerPage = Math.max(1, (state.ledgerPage || 1) - 1);
-    refresh();
-  };
-  document.getElementById("ledger-next").onclick = () => {
-    state.ledgerPage = (state.ledgerPage || 1) + 1;
-    refresh();
-  };
   form.onsubmit = async (event) => {
     event.preventDefault();
     const button = event.target.querySelector("button[type=submit]");
@@ -456,9 +434,8 @@ function updateWillApply(form, meta) {
   }
 }
 
-async function refreshForecast(form, page = 1) {
+async function refreshForecast(form) {
   const payload = formPayload(form);
-  const period = document.getElementById("ledger-period")?.value || "day";
   const query = new URLSearchParams({
     model: payload.model,
     gpu: payload.gpu,
@@ -467,15 +444,12 @@ async function refreshForecast(form, page = 1) {
     height: String(payload.height || 1024),
     batch_size: String(payload.batch_size || 4),
     workers: String(payload.workers || 1),
-    period,
-    page: String(page || 1),
-    per_page: "15",
+    include_ledger: "false",
   });
   if (payload.steps != null) query.set("steps", String(payload.steps));
   try {
     const data = await api(`/api/cost/forecast?${query}`);
     renderForecast(data);
-    renderLedger(data.ledger);
   } catch (error) {
     const load = document.getElementById("fc-load");
     if (load) load.textContent = error.message;
@@ -508,53 +482,158 @@ function renderForecast(data) {
   }
 }
 
-function renderLedger(ledger) {
-  if (!ledger) return;
-  const snaps = document.getElementById("ledger-snaps");
-  const snapshots = ledger.snapshots || {};
-  const grainLabel = { hour: "小时", day: "天", week: "周", month: "月" };
-  if (snaps) {
-    snaps.innerHTML = ["hour", "day", "week", "month"].map((grain) => {
-      const row = snapshots[grain] || {};
-      return `<div class="snap"><span>${grainLabel[grain]}</span><strong>${formatUsd(row.total_cost_usd)}</strong><small>加载 ${formatUsd(row.load_cost_usd)} · 生成 ${formatUsd(row.generate_cost_usd)}</small></div>`;
-    }).join("");
+function renderChain(chain) {
+  if (!chain || !chain.length) return "<p class=\"lede\">没有调用链。</p>";
+  return `<ol class="chain">${chain.map((step) => `
+    <li>
+      <span>${step.name || step.kind}</span>
+      <span class="mono">${escapeHtml(step.detail || "")}</span>
+      <span class="mono">${step.cost_usd != null ? formatUsd(step.cost_usd) : ""}</span>
+    </li>`).join("")}</ol>`;
+}
+
+function renderCostEvents(items, error) {
+  if (!items.length) {
+    return `<p class="lede">${error || "这个周期没有 Modal 费用事件。真实生成会写入共享账本。"}</p>`;
   }
-  const periods = document.getElementById("ledger-periods");
-  if (periods) {
-    const rows = ledger.periods || [];
-    periods.innerHTML = rows.length
-      ? rows.map((row) => `
-          <tr>
-            <td class="mono">${row.period}</td>
-            <td class="mono">${formatUsd(row.load_cost_usd)}</td>
-            <td class="mono">${formatUsd(row.generate_cost_usd)}</td>
-            <td class="mono">${formatUsd(row.total_cost_usd)}</td>
-            <td>${row.count}</td>
-          </tr>`).join("")
-      : `<tr><td colspan="5">${ledger.error || "还没有共享事件。第一次真实 Modal 生成会写入账本。"}</td></tr>`;
+  return items.map((item) => `
+    <details class="event">
+      <summary>
+        <span class="mono">${(item.ts || "").replace("T", " ").slice(0, 19)}</span>
+        <span>${kindLabel(item.kind)}</span>
+        <span class="mono">${item.job_id ? `<a href="#/job/${escapeAttr(item.job_id)}">${escapeHtml(item.job_id)}</a>` : "—"}</span>
+        <span>${item.billed_gpu || item.actual_gpu || item.requested_gpu || "—"}</span>
+        <span class="mono">${formatRate(item.usd_per_second)}</span>
+        <span class="mono">${Number(item.gpu_seconds || 0).toFixed(4)}s</span>
+        <span class="mono">${formatUsd(item.cost_usd)}</span>
+      </summary>
+      <p class="apply-line mono">${escapeHtml(item.formula || "")}</p>
+      ${renderChain(item.chain)}
+      <dl class="meta-inline">
+        <dt>模型</dt><dd>${item.model || "—"}</dd>
+        <dt>generation</dt><dd class="mono">${item.generation_id || "—"}</dd>
+        <dt>function_call</dt><dd class="mono">${item.modal_function_call_id || "—"}</dd>
+        <dt>input</dt><dd class="mono">${item.modal_input_id || "—"}</dd>
+        <dt>task</dt><dd class="mono">${item.modal_task_id || "—"}</dd>
+        <dt>显存</dt><dd class="mono">${formatVram(item)}</dd>
+      </dl>
+    </details>`).join("");
+}
+
+async function costPage(meta, params) {
+  const period = params.get("period") || "day";
+  const kind = params.get("kind") || "";
+  const job = params.get("job") || "";
+  const page = Number(params.get("page") || 1);
+  state.ledgerPage = page;
+  const query = new URLSearchParams({ period, page: String(page), per_page: "25" });
+  if (kind) query.set("kind", kind);
+  if (job) query.set("job_id", job);
+  let ledger = {};
+  let balance = {};
+  let jobs = [];
+  try {
+    [ledger, balance, jobs] = await Promise.all([
+      api(`/api/cost/ledger?${query}`),
+      api("/api/cost/balance"),
+      api("/api/jobs"),
+    ]);
+  } catch (error) {
+    main.innerHTML = `<h1>费用</h1><p class="lede">${escapeHtml(error.message)}</p>`;
+    return;
   }
-  const events = document.getElementById("ledger-events");
-  if (events) {
-    const rows = ledger.items || [];
-    events.innerHTML = rows.length
-      ? rows.map((item) => `
-          <tr>
-            <td class="mono">${(item.ts || "").replace("T", " ").slice(0, 19)}</td>
-            <td>${item.kind}</td>
-            <td>${item.model || "—"}</td>
-            <td>${item.actual_gpu || item.requested_gpu || "—"}</td>
-            <td class="mono">${formatVram(item)}</td>
-            <td class="mono">${Number(item.gpu_seconds || 0).toFixed(3)}</td>
-            <td class="mono">${formatUsd(item.cost_usd)}</td>
-          </tr>`).join("")
-      : `<tr><td colspan="7">${ledger.error || "这个周期没有事件。"}</td></tr>`;
-  }
-  const page = document.getElementById("ledger-page");
-  if (page) page.textContent = `第 ${ledger.page || 1} / ${ledger.pages || 1} 页 · ${ledger.total || 0} 条`;
-  const prev = document.getElementById("ledger-prev");
-  const next = document.getElementById("ledger-next");
-  if (prev) prev.disabled = (ledger.page || 1) <= 1;
-  if (next) next.disabled = (ledger.page || 1) >= (ledger.pages || 1);
+  const grainLabel = { hour: "小时", day: "天", week: "周", month: "月", all: "全部" };
+  const snaps = ledger.snapshots || {};
+  main.innerHTML = `
+    <h1>费用</h1>
+    <p class="lede">每一笔都是 Modal GPU 秒 × 公布的每秒单价。点开看调用链和对应任务。发票以 <code>modal billing</code> 为准。</p>
+    <section class="panel">
+      <div class="check"><span>工作区</span><span class="mono">${balance.workspace || "—"}</span></div>
+      <div class="check"><span>本月计量</span><span class="mono">${balance.ok ? formatUsd(balance.metered_usd) : (balance.error || "—")}</span></div>
+      <div class="check"><span>剩余（估）</span><span class="mono">${balance.ok ? formatUsd(balance.remaining_usd) : "—"}</span></div>
+    </section>
+    <div class="snapshots" id="ledger-snaps">
+      ${["hour", "day", "week", "month"].map((grain) => {
+        const row = snaps[grain] || {};
+        return `<div class="snap"><span>${grainLabel[grain]}</span><strong>${formatUsd(row.total_cost_usd)}</strong><small>加载 ${formatUsd(row.load_cost_usd)} · 生成 ${formatUsd(row.generate_cost_usd)}</small></div>`;
+      }).join("")}
+    </div>
+    <h2 class="section">单价</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th scope="col">GPU</th><th scope="col">$/s</th><th scope="col">$/小时</th><th scope="col">¢ / 10s</th></tr></thead>
+        <tbody>
+          ${(meta.gpus || []).map((gpu) => `
+            <tr>
+              <td>${gpu.id}</td>
+              <td class="mono">$${Number(gpu.usd_per_second).toFixed(6)}</td>
+              <td class="mono">$${Number(gpu.usd_per_hour).toFixed(2)}</td>
+              <td class="mono">${(Number(gpu.usd_per_second) * 1000).toFixed(3)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <h2 class="section">每一笔调用</h2>
+    <form class="toolbar" id="cost-filters">
+      <label class="field" for="cost-period">周期
+        <select id="cost-period" name="period">
+          ${[["hour", "小时"], ["day", "天"], ["week", "周"], ["month", "月"], ["all", "全部"]].map(([value, label]) => `<option value="${value}" ${value === period ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
+      </label>
+      <label class="field" for="cost-kind">类型
+        <select id="cost-kind" name="kind">
+          ${[["", "全部"], ["gpu_load", "加载"], ["gpu_generate", "生成"]].map(([value, label]) => `<option value="${value}" ${value === kind ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
+      </label>
+      <label class="field" for="cost-job">任务编号
+        <input id="cost-job" name="job" value="${escapeAttr(job)}" autocomplete="off" />
+      </label>
+      <button type="submit" class="ghost">筛选</button>
+    </form>
+    <div class="panel events">${renderCostEvents(ledger.items || [], ledger.error)}</div>
+    <div class="pager">
+      <button type="button" class="ghost" id="ledger-prev" ${page <= 1 ? "disabled" : ""}>上一页</button>
+      <span id="ledger-page">第 ${ledger.page || 1} / ${ledger.pages || 1} 页 · ${ledger.total || 0} 条</span>
+      <button type="button" class="ghost" id="ledger-next" ${(ledger.page || 1) >= (ledger.pages || 1) ? "disabled" : ""}>下一页</button>
+    </div>
+    <h2 class="section">本机任务</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th scope="col">任务</th><th scope="col">状态</th><th scope="col">GPU</th><th scope="col">秒</th><th scope="col">$</th></tr></thead>
+        <tbody>
+          ${jobs.map((row) => `
+            <tr>
+              <td class="mono"><a href="#/job/${row.id}">${row.id}</a></td>
+              <td><span class="pill ${row.status}">${statusLabel(row.status)}</span></td>
+              <td>${row.gpu}</td>
+              <td class="mono">${(row.gpu_seconds || 0).toFixed(4)}</td>
+              <td class="mono">${formatUsd(row.cost_usd)}</td>
+            </tr>`).join("") || `<tr><td colspan="5">还没有任务。</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById("cost-filters").onsubmit = (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const next = new URLSearchParams({
+      period: data.get("period") || "day",
+      kind: data.get("kind") || "",
+      job: data.get("job") || "",
+      page: "1",
+    });
+    location.hash = `#/cost?${next}`;
+  };
+  document.getElementById("ledger-prev").onclick = () => {
+    const next = new URLSearchParams(params);
+    next.set("page", String(Math.max(1, page - 1)));
+    location.hash = `#/cost?${next}`;
+  };
+  document.getElementById("ledger-next").onclick = () => {
+    const next = new URLSearchParams(params);
+    next.set("page", String(page + 1));
+    location.hash = `#/cost?${next}`;
+  };
 }
 
 function batchPage(meta) {
@@ -852,7 +931,9 @@ async function render(forced) {
   const page = forced || pageName || "generate";
   const params = new URLSearchParams(query || "");
   document.querySelectorAll("nav a").forEach((link) => {
-    const active = link.dataset.page === page || (page.startsWith("job/") && link.dataset.page === "jobs");
+    const active = link.dataset.page === page
+      || (page.startsWith("job/") && link.dataset.page === "jobs")
+      || (page.startsWith("cost") && link.dataset.page === "cost");
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
@@ -862,6 +943,7 @@ async function render(forced) {
   else if (page === "jobs") await jobsPage();
   else if (page.startsWith("job/")) await jobDetailPage(page.slice(4));
   else if (page === "gallery") await galleryPage(params);
+  else if (page === "cost") await costPage(state.meta, params);
   else if (page === "benchmark") benchmarkPage(state.meta);
   else if (page === "settings") await settingsPage(state.meta);
   else generatePage(state.meta);

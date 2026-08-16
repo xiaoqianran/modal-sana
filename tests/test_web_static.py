@@ -55,6 +55,18 @@ def test_four_k_defaults_to_rtx_pro_6000() -> None:
     assert "native_width) >= 4096" in js
 
 
+def test_cost_page_is_first_class() -> None:
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert 'data-page="cost"' in html
+    assert "费用" in html
+    assert "async function costPage" in js
+    assert "function formatRate" in js
+    assert "include_ledger: \"false\"" in js
+    assert "renderChain" in js
+    assert "#/cost" in js
+
+
 def test_workers_default_is_one_gpu() -> None:
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "workers: meta?.defaults?.workers || 1" in js

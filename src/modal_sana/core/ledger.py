@@ -21,6 +21,8 @@ class CostEvent:
     actual_device: str | None = None
     gpu_seconds: float = 0.0
     cost_usd: float = 0.0
+    usd_per_second: float | None = None
+    usd_per_hour: float | None = None
     load_ms: float | None = None
     infer_ms: float | None = None
     encode_ms: float | None = None
@@ -33,11 +35,13 @@ class CostEvent:
     guidance: float | None = None
     seed: int | None = None
     cold_start: bool = False
+    from_snapshot: bool | None = None
     gpu_match: bool | None = None
     model_match: bool | None = None
     modal_function_call_id: str | None = None
     modal_input_id: str | None = None
     modal_task_id: str | None = None
+    generation_ids: list[str] | None = None
     workspace: str | None = None
     source: str = "modal-worker"
 
@@ -113,6 +117,7 @@ def filter_events(
     kind: str | None = None,
     model: str | None = None,
     gpu: str | None = None,
+    job_id: str | None = None,
 ) -> list[CostEvent]:
     start, end = period_window(period) if period != "all" and since is None and until is None else (since, until)
     out: list[CostEvent] = []
@@ -127,6 +132,8 @@ def filter_events(
         if model and event.model != model:
             continue
         if gpu and event.actual_gpu != gpu and event.requested_gpu != gpu:
+            continue
+        if job_id and event.job_id != job_id:
             continue
         out.append(event)
     out.sort(key=lambda item: item.ts, reverse=True)
@@ -169,7 +176,7 @@ def paginate(events: list[CostEvent], page: int, per_page: int) -> dict[str, Any
     start = (page - 1) * per_page
     items = events[start : start + per_page]
     return {
-        "items": [item.as_dict() for item in items],
+        "items": [enrich_event(item) for item in items],
         "total": total,
         "page": page,
         "per_page": per_page,
@@ -185,6 +192,75 @@ def merge_events(*groups: list[CostEvent]) -> list[CostEvent]:
     merged = list(by_id.values())
     merged.sort(key=lambda item: item.ts, reverse=True)
     return merged
+
+
+def enrich_event(event: CostEvent) -> dict[str, Any]:
+    """Add $/s, the seconds × rate formula, and the Modal call chain."""
+    from modal_sana.core.cost import cost_formula, format_rate
+    from modal_sana.modal.gpu import get_gpu
+
+    payload = event.as_dict()
+    gpu = event.actual_gpu or event.requested_gpu
+    rate = event.usd_per_second
+    hour = event.usd_per_hour
+    if rate is None and gpu:
+        try:
+            spec = get_gpu(gpu)
+            rate = spec.usd_per_second
+            hour = spec.usd_per_hour
+        except ValueError:
+            rate = None
+            hour = None
+    seconds = float(event.gpu_seconds or 0.0)
+    payload["usd_per_second"] = rate
+    payload["usd_per_hour"] = hour
+    payload["rate_display"] = format_rate(rate)
+    payload["formula"] = cost_formula(gpu, seconds, rate, event.cost_usd)
+    payload["chain"] = call_chain(event)
+    payload["billed_gpu"] = gpu
+    return payload
+
+
+def call_chain(event: CostEvent) -> list[dict[str, Any]]:
+    gpu = event.actual_gpu or event.requested_gpu or "?"
+    seconds = float(event.gpu_seconds or 0.0)
+    kind_label = {
+        "gpu_load": "加载权重",
+        "gpu_generate": "推理+编码",
+    }.get(event.kind, event.kind)
+    steps: list[dict[str, Any]] = [
+        {"name": "modal-sana", "kind": "app", "detail": event.source or "modal-worker"},
+    ]
+    if event.modal_task_id:
+        steps.append({"name": "container", "kind": "task", "detail": event.modal_task_id})
+    if event.modal_function_call_id:
+        steps.append(
+            {
+                "name": "SanaWorker.generate_batch",
+                "kind": "function_call",
+                "detail": event.modal_function_call_id,
+            }
+        )
+    if event.modal_input_id:
+        steps.append({"name": "input", "kind": "input", "detail": event.modal_input_id})
+    steps.append(
+        {
+            "name": kind_label,
+            "kind": event.kind,
+            "detail": f"{gpu} · {seconds:.4f}s",
+            "gpu_seconds": seconds,
+            "cost_usd": event.cost_usd,
+            "usd_per_second": event.usd_per_second,
+        }
+    )
+    if event.generation_id:
+        steps.append({"name": "generation", "kind": "generation", "detail": event.generation_id})
+    ids = [item for item in (event.generation_ids or []) if item and item != event.generation_id]
+    for extra_id in ids:
+        steps.append({"name": "generation", "kind": "generation", "detail": extra_id})
+    if event.job_id:
+        steps.append({"name": "job", "kind": "job", "detail": event.job_id})
+    return steps
 
 
 def _sum_cost(events: list[CostEvent]) -> float:

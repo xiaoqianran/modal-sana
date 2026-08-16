@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from modal_sana.core.cost import cost_for_seconds, format_usd, item_gpu_seconds
+from modal_sana.core.cost import cost_for_seconds, cost_formula, format_rate, format_usd, item_gpu_seconds
 from modal_sana.modal.gpu import estimate_cost_usd
 from modal_sana.modal.worker import (
     MEMORY_SNAPSHOT,
@@ -48,6 +48,8 @@ def test_l40s_list_price() -> None:
     text = format_usd(0.00542)
     assert "$0.005420" in text
     assert "¢" in text
+    assert "$0.000542/s" in format_rate(0.000542)
+    assert "L40S · 10.0000s × $0.000542/s" in cost_formula("L40S", 10, 0.000542, 0.00542)
 
 
 def test_scaledown_is_ten_seconds() -> None:

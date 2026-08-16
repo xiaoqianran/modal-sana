@@ -38,5 +38,25 @@ def format_usd(amount: float | None) -> str:
     return f"${amount:.4f} ({cents:.2f}¢)"
 
 
+def format_rate(usd_per_second: float | None) -> str:
+    if usd_per_second is None:
+        return "—"
+    return f"${usd_per_second:.6f}/s · ${usd_per_second * 3600:.2f}/时"
+
+
+def cost_formula(
+    gpu: str | None,
+    seconds: float,
+    usd_per_second: float | None,
+    cost_usd: float | None = None,
+) -> str:
+    card = gpu or "?"
+    sec = max(float(seconds or 0.0), 0.0)
+    if usd_per_second is None:
+        return f"{card} · {sec:.4f}s"
+    shown = cost_usd if cost_usd is not None else usd_per_second * sec
+    return f"{card} · {sec:.4f}s × ${usd_per_second:.6f}/s = {format_usd(shown)}"
+
+
 def gpu_rate(gpu_id: str) -> float:
     return get_gpu(gpu_id).usd_per_second
