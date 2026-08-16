@@ -28,3 +28,4 @@ outputs/
 .DS_Store
 .idea/
 .vscode/
+.cursor/

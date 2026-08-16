@@ -3,6 +3,7 @@ from __future__ import annotations
 import modal
 
 CACHE_DIR = "/cache"
+MODELS_DIR = "/cache/models"
 CACHE_VOLUME_NAME = "modal-sana-hf-cache"
 
 

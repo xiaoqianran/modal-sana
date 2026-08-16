@@ -208,6 +208,22 @@ def get_job(job_id: str) -> dict[str, Any]:
         raise HTTPException(404, f"unknown job {job_id}") from exc
 
 
+@router.get("/jobs/{job_id}/trace")
+def get_job_trace(job_id: str) -> dict[str, Any]:
+    try:
+        return _service.get_trace(job_id)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown job {job_id}") from exc
+
+
+@router.get("/jobs/{job_id}/cost")
+def get_job_cost(job_id: str) -> dict[str, Any]:
+    try:
+        return _service.cost_report(job_id)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown job {job_id}") from exc
+
+
 @router.post("/jobs/{job_id}/resume")
 def resume_job(job_id: str) -> dict[str, Any]:
     try:

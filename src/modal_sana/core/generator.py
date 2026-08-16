@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,7 @@ class GenerateResult(BaseModel):
     height: int = 0
     latency_ms: float = 0.0
     error: str | None = None
+    telemetry: dict[str, Any] = Field(default_factory=dict)
 
 
 class ImageGenerator(Protocol):

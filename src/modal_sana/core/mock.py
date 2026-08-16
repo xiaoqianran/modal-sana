@@ -33,6 +33,9 @@ def render_placeholder(request: GenerateRequest) -> Image.Image:
 class MockGenerator:
     """Local stand-in so CLI/Web/tests work without Modal credentials."""
 
+    def __init__(self) -> None:
+        self.last_meta: dict = {}
+
     def generate_batches(
         self,
         batches: list[list[GenerateRequest]],
@@ -43,16 +46,34 @@ class MockGenerator:
         retry: int = 2,
         deployed: bool = False,
     ) -> Iterator[GenerateResult]:
-        del gpu, workers, model, retry, deployed
+        map_started = time.perf_counter()
+        del workers, retry, deployed
         for batch in batches:
             for request in batch:
                 started = time.perf_counter()
                 image = render_placeholder(request)
                 payload = encode_image(image, request.image_format, request.quality)
+                latency_ms = (time.perf_counter() - started) * 1000
                 yield GenerateResult(
                     generation_id=request.generation_id,
                     image_bytes=payload,
                     width=request.width,
                     height=request.height,
-                    latency_ms=(time.perf_counter() - started) * 1000,
+                    latency_ms=latency_ms,
+                    telemetry={
+                        "load_ms": 0.0,
+                        "infer_ms": latency_ms * 0.85,
+                        "encode_ms": latency_ms * 0.15,
+                        "gpu_seconds": 0.0,
+                        "cost_usd": 0.0,
+                        "cold_start": False,
+                        "dry_run": True,
+                    },
                 )
+        self.last_meta = {
+            "deployed": False,
+            "dry_run": True,
+            "map_wall_ms": (time.perf_counter() - map_started) * 1000,
+            "gpu": gpu,
+            "model": model,
+        }

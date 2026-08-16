@@ -9,6 +9,8 @@ from modal_sana.cli.doctor import doctor
 from modal_sana.cli.generate import generate
 from modal_sana.cli.jobs import cancel, job, jobs, resume
 from modal_sana.cli.models import gpus, models
+from modal_sana.cli.prefetch import prefetch
+from modal_sana.cli.trace import cost, trace
 from modal_sana.cli.web import web
 
 app = typer.Typer(
@@ -30,6 +32,9 @@ app.command("gpus")(gpus)
 app.command("doctor")(doctor)
 app.command("web")(web)
 app.command("benchmark")(benchmark)
+app.command("trace")(trace)
+app.command("cost")(cost)
+app.command("prefetch")(prefetch)
 
 
 @app.callback()

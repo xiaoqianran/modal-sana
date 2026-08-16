@@ -34,6 +34,14 @@ def test_create_job_and_gallery(tmp_path, monkeypatch) -> None:
     file = client.get(f"/api/images/{image_id}/file")
     assert file.status_code == 200
     assert file.content[:4] in {b"RIFF", b"\x89PNG"}
+    cost = client.get(f"/api/jobs/{job_id}/cost")
+    assert cost.status_code == 200
+    assert cost.json()["cost_usd"] == 0
+    trace = client.get(f"/api/jobs/{job_id}/trace")
+    assert trace.status_code == 200
+    names = {span["name"] for span in trace.json()["spans"]}
+    assert "job.run" in names
+    assert "modal.generate" in names
 
 
 def test_meta_and_health() -> None:

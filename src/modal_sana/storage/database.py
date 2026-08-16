@@ -31,6 +31,10 @@ class JobRow(SQLModel, table=True):
     completed_images: int = 0
     failed_images: int = 0
     error: str | None = None
+    gpu_seconds: float | None = None
+    cost_usd: float | None = None
+    modal_app_id: str | None = None
+    modal_run_url: str | None = None
 
     def config(self) -> JobConfig:
         return JobConfig.model_validate_json(self.config_json)
@@ -52,6 +56,10 @@ class JobRow(SQLModel, table=True):
             dry_run=cfg.dry_run,
             error=self.error,
             config=cfg,
+            gpu_seconds=self.gpu_seconds,
+            cost_usd=self.cost_usd,
+            modal_app_id=self.modal_app_id,
+            modal_run_url=self.modal_run_url,
         )
 
 
@@ -92,6 +100,15 @@ class GenerationRow(SQLModel, table=True):
     completed_at: datetime | None = None
     latency_ms: float | None = None
     task_hash: str = Field(index=True)
+    modal_function_call_id: str | None = Field(default=None, index=True)
+    modal_input_id: str | None = Field(default=None, index=True)
+    gpu_seconds: float | None = None
+    cost_usd: float | None = None
+    load_ms: float | None = None
+    infer_ms: float | None = None
+    encode_ms: float | None = None
+    vram_allocated_mb: float | None = None
+    extra_json: str | None = None
 
 
 class ImageRow(SQLModel, table=True):
@@ -109,6 +126,47 @@ class ImageRow(SQLModel, table=True):
     created_at: datetime
 
 
+class TraceSpanRow(SQLModel, table=True):
+    __tablename__ = "trace_spans"
+
+    span_id: str = Field(primary_key=True)
+    parent_span_id: str | None = Field(default=None, index=True)
+    job_id: str = Field(index=True)
+    generation_id: str | None = Field(default=None, index=True)
+    name: str = Field(index=True)
+    kind: str = "local"
+    status: str = "ok"
+    started_at: datetime
+    ended_at: datetime | None = None
+    duration_ms: float | None = None
+    gpu: str | None = None
+    model: str | None = None
+    modal_function_call_id: str | None = Field(default=None, index=True)
+    modal_input_id: str | None = None
+    modal_app_id: str | None = None
+    cost_usd: float | None = None
+    extra_json: str = "{}"
+
+
+_JOB_MIGRATIONS = {
+    "gpu_seconds": "FLOAT",
+    "cost_usd": "FLOAT",
+    "modal_app_id": "VARCHAR",
+    "modal_run_url": "VARCHAR",
+}
+_GENERATION_MIGRATIONS = {
+    "modal_function_call_id": "VARCHAR",
+    "modal_input_id": "VARCHAR",
+    "gpu_seconds": "FLOAT",
+    "cost_usd": "FLOAT",
+    "load_ms": "FLOAT",
+    "infer_ms": "FLOAT",
+    "encode_ms": "FLOAT",
+    "vram_allocated_mb": "FLOAT",
+    "extra_json": "TEXT",
+}
+
+
 class Database:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,7 +176,23 @@ class Database:
             connect_args={"check_same_thread": False},
         )
         SQLModel.metadata.create_all(self.engine)
+        self._ensure_columns()
         self._lock = threading.RLock()
+
+    def _ensure_columns(self) -> None:
+        """SQLite create_all will not ADD columns to an existing file."""
+        from sqlalchemy import inspect, text
+
+        inspector = inspect(self.engine)
+        wanted = {"jobs": _JOB_MIGRATIONS, "generations": _GENERATION_MIGRATIONS}
+        with self.engine.begin() as conn:
+            for table, columns in wanted.items():
+                if table not in inspector.get_table_names():
+                    continue
+                existing = {col["name"] for col in inspector.get_columns(table)}
+                for name, ddl in columns.items():
+                    if name not in existing:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
     @contextmanager
     def session(self) -> Iterator[Session]:
