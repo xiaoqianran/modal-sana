@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Annotated
 
 import typer
@@ -19,7 +18,13 @@ def prefetch(
     ] = None,
     all_models: Annotated[bool, typer.Option("--all", help="Download every registered SANA model")] = False,
     status: Annotated[bool, typer.Option("--status", help="List what is already on the Volume")] = False,
-    deployed: Annotated[bool, typer.Option("--deployed", help="Call a deployed Modal app")] = False,
+    deployed: Annotated[
+        bool | None,
+        typer.Option(
+            "--deployed/--ephemeral",
+            help="Call the deployed app or force ephemeral. Default: deployed if it exists.",
+        ),
+    ] = None,
 ) -> None:
     """Download SANA weights onto the Modal Volume using CPU only.
 
@@ -28,14 +33,22 @@ def prefetch(
     import modal
 
     from modal_sana.modal.app import app
+    from modal_sana.modal.client import ensure_local_app_objects
+    from modal_sana.modal.deploy_mode import DeployedAppMissing, resolve_deploy_mode
     from modal_sana.modal.prefetch import list_volume_models, prefetch_model
 
     ids = models_to_prefetch(model, all_models=all_models)
     secrets = modal_download_secrets()
+    ensure_local_app_objects()
 
-    use_deployed = deployed or os.environ.get("MODAL_SANA_DEPLOYED") == "1"
-    if use_deployed:
-        name = os.environ.get("MODAL_SANA_APP_NAME", "modal-sana")
+    try:
+        decision = resolve_deploy_mode(deployed)
+    except DeployedAppMissing as exc:
+        raise SystemExit(str(exc)) from exc
+    console.print(f"Modal: [bold]{decision.mode}[/bold] ({decision.reason})")
+
+    if decision.use_deployed:
+        name = decision.app_name
         if status:
             rows = modal.Function.from_name(name, "list_volume_models").remote()
             _print_status(rows)

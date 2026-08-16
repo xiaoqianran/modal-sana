@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     port: int = 7860
     default_model: str = "sana-sprint-1.6b"
     default_gpu: str = "L40S"
-    deployed: bool = False
+    deployed: bool | None = None
     app_name: str = "modal-sana"
     monthly_credits_usd: float | None = 30.0
 

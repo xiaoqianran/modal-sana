@@ -37,7 +37,7 @@ def run_batches(
     workers: int,
     model: str,
     retry: int,
-    deployed: bool,
+    deployed: bool | None,
 ) -> Iterator[GenerateResult]:
     """Fan-out helper. Modal does the real scheduling via .map()."""
     batches = [

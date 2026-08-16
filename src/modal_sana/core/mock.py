@@ -44,7 +44,7 @@ class MockGenerator:
         workers: int,
         model: str,
         retry: int = 2,
-        deployed: bool = False,
+        deployed: bool | None = None,
     ) -> Iterator[GenerateResult]:
         map_started = time.perf_counter()
         del workers, retry, deployed

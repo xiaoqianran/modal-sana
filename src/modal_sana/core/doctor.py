@@ -67,6 +67,23 @@ def run_doctor() -> DoctorReport:
     except Exception as exc:  # noqa: BLE001
         report.add("network", False, str(exc))
 
+    try:
+        from modal_sana.modal.deploy_mode import DEPLOY_COMMAND, deployed_app_available, deployed_app_name
+
+        name = deployed_app_name()
+        found, detail = deployed_app_available(name)
+        if found:
+            report.add("Deployed app", True, f"{name} · SanaWorker (snapshots on)")
+        else:
+            report.add(
+                "Deployed app",
+                False,
+                f"{name} missing — ephemeral app.run() has no snapshots. {DEPLOY_COMMAND}"
+                + (f" ({detail})" if detail else ""),
+            )
+    except Exception as exc:  # noqa: BLE001
+        report.add("Deployed app", False, str(exc))
+
     return report
 
 

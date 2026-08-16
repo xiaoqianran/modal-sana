@@ -39,6 +39,7 @@ function defaultsFrom(meta) {
     workers: 2,
     format: "webp",
     dry_run: false,
+    prefer_deployed: meta?.defaults?.prefer_deployed !== false,
   };
 }
 
@@ -88,6 +89,7 @@ function settingsGrid(d, meta) {
       ${select("image_format", "Format", ["webp", "png", "jpg"], d.format)}
     </div>
     ${field("dry_run", "Dry run (no Modal / no GPU)", d.dry_run, "checkbox")}
+    ${field("prefer_deployed", "Prefer deployed Modal app (memory snapshots)", d.prefer_deployed !== false, "checkbox")}
   `;
 }
 
@@ -110,7 +112,15 @@ function formPayload(form) {
     workers: Number(data.get("workers") || 2),
     image_format: data.get("image_format") || "webp",
     dry_run: data.get("dry_run") === "on",
+    prefer_deployed: data.get("prefer_deployed") === "on",
   };
+}
+
+function jobPayload(form) {
+  const payload = formPayload(form);
+  if (!payload.prefer_deployed) payload.deployed = false;
+  delete payload.prefer_deployed;
+  return payload;
 }
 
 function formatUsd(amount) {
@@ -140,6 +150,7 @@ async function jobDetailPage(jobId) {
       <div class="check"><span>Images</span><span>${job.completed_images}/${job.total_images}</span></div>
       <div class="check"><span>GPU seconds</span><span class="mono">${(job.gpu_seconds || 0).toFixed(4)}</span></div>
       <div class="check"><span>Estimated cost</span><span class="mono">${formatUsd(job.cost_usd)}</span></div>
+      <div class="check"><span>Modal path</span><span class="mono">${job.config?.deployed === true ? "deployed (required)" : job.config?.deployed === false ? "ephemeral (forced)" : "auto"}</span></div>
       <div class="check"><span>Modal app</span><span class="mono">${job.modal_app_id || "—"}</span></div>
       <div class="check"><span>Run</span>${job.modal_run_url ? `<a href="${job.modal_run_url}" target="_blank" rel="noreferrer">${job.modal_run_url}</a>` : "<span>—</span>"}</div>
       <p class="lede" style="margin:16px 0 0">${detail.cost?.notes || ""}</p>
@@ -211,7 +222,9 @@ function showApplied(payload) {
   const match = payload.gpu_match;
   const cls = match === false ? "bad" : "ok";
   const snap = payload.from_snapshot;
-  root.innerHTML = `<div class="apply-line ${cls}">container GPU=${actual || "?"} (${device || "no cuda name"}) · requested ${requested || "?"} · model ${model || "?"} · match=${match == null ? "?" : match} · snapshot=${snap == null ? "?" : snap}</div>`;
+  const path = payload.deploy_mode || (payload.deployed ? "deployed" : payload.deployed === false ? "ephemeral" : "");
+  const pathBit = path ? ` · path=${path}` : "";
+  root.innerHTML = `<div class="apply-line ${cls}">container GPU=${actual || "?"} (${device || "no cuda name"}) · requested ${requested || "?"} · model ${model || "?"} · match=${match == null ? "?" : match} · snapshot=${snap == null ? "?" : snap}${pathBit}</div>`;
 }
 
 function listenJob(jobId) {
@@ -239,7 +252,8 @@ function generatePage(meta) {
   const d = defaultsFrom(meta);
   main.innerHTML = `
     <h1>Generate</h1>
-    <p class="lede">One prompt. Model and GPU are independent — switching the model does not switch the card. The forecast below is Modal list price before you spend.</p>
+    <p class="lede">One prompt. This local web is <strong>not</strong> <code>modal serve</code>. Generate prefers the app from <code>modal deploy</code> (snapshots on). No deploy → one-off ephemeral <code>app.run()</code>.</p>
+    <p class="lede mono" id="runtime-line"></p>
     <form class="panel" id="gen-form">
       <label>Prompt</label>
       <textarea name="prompt" placeholder="a futuristic Tokyo street at night" required></textarea>
@@ -314,7 +328,7 @@ function generatePage(meta) {
     const button = event.target.querySelector("button[type=submit]");
     button.disabled = true;
     try {
-      const payload = formPayload(event.target);
+      const payload = jobPayload(event.target);
       payload.prompt = new FormData(event.target).get("prompt");
       const job = await api("/api/jobs", {
         method: "POST",
@@ -341,7 +355,12 @@ function updateWillApply(form, meta) {
   const steps = payload.steps || model?.default_steps || "?";
   const line = document.getElementById("will-apply");
   if (!line) return;
-  line.textContent = `will request GPU=${payload.gpu}  model=${payload.model}  ${payload.width}×${payload.height}  steps=${steps}  count=${payload.count}`;
+  const runtime = meta.runtime || {};
+  const prefer = payload.prefer_deployed !== false;
+  const path = !prefer ? "ephemeral (forced)" : runtime.would_use || "auto";
+  line.textContent = `will request GPU=${payload.gpu}  model=${payload.model}  ${payload.width}×${payload.height}  steps=${steps}  count=${payload.count}  ·  ${path}`;
+  const runtimeLine = document.getElementById("runtime-line");
+  if (runtimeLine) runtimeLine.textContent = runtime.note || "";
   if (gpu && model && gpu.vram_gb < (model.min_vram_gb || 0)) {
     line.textContent += `  ·  WARN ${gpu.id} ${gpu.vram_gb}GB < model min ${model.min_vram_gb}GB`;
     line.classList.add("bad");
@@ -479,7 +498,7 @@ function batchPage(meta) {
     const button = event.target.querySelector("button");
     button.disabled = true;
     try {
-      const payload = formPayload(event.target);
+      const payload = jobPayload(event.target);
       const file = fileInput.files[0];
       let job;
       if (file) {
@@ -496,6 +515,7 @@ function batchPage(meta) {
           dry_run: String(payload.dry_run),
           image_format: payload.image_format,
         });
+        if (payload.deployed === false) query.set("deployed", "false");
         job = await api(`/api/jobs/from-file?${query}`, { method: "POST", body });
       } else {
         payload.text = new FormData(event.target).get("text");
@@ -698,6 +718,8 @@ async function settingsPage(meta) {
       <div class="check"><span>Data dir</span><span class="mono">${meta.defaults.data_dir}</span></div>
       <div class="check"><span>Default model</span><span>${meta.defaults.model}</span></div>
       <div class="check"><span>Default GPU</span><span>${meta.defaults.gpu}</span></div>
+      <div class="check"><span>Modal path</span><span class="mono">${meta.runtime?.would_use || "auto"} · ${meta.runtime?.app_name || "modal-sana"}</span></div>
+      <p class="lede">${meta.runtime?.note || ""}</p>
       <h3>Doctor</h3>
       <div class="checks">
         ${doctor.checks.map((check) => `
@@ -736,9 +758,18 @@ lightbox.addEventListener("click", (event) => {
 
 (async () => {
   try {
-    const doctor = await api("/api/doctor");
-    railStatus.textContent = doctor.ready ? "modal ready" : "modal not signed in";
-    railStatus.className = `rail-foot ${doctor.ready ? "ok" : "bad"}`;
+    const [doctor, meta] = await Promise.all([api("/api/doctor"), api("/api/meta")]);
+    state.meta = meta;
+    if (!doctor.ready) {
+      railStatus.textContent = "modal not signed in";
+      railStatus.className = "rail-foot bad";
+    } else if (meta.runtime?.available) {
+      railStatus.textContent = "deployed · snapshots on";
+      railStatus.className = "rail-foot ok";
+    } else {
+      railStatus.textContent = "ephemeral · run modal deploy";
+      railStatus.className = "rail-foot bad";
+    }
   } catch {
     railStatus.textContent = "api offline";
   }

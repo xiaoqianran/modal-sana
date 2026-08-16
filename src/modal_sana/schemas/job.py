@@ -27,7 +27,7 @@ class JobConfig(BaseModel):
     quality: int = 90
     negative_prompt: str = ""
     dry_run: bool = False
-    deployed: bool = False
+    deployed: bool | None = None
     deduplicate: bool = False
     dedup_mode: DedupMode = "skip"
 

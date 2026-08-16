@@ -387,6 +387,13 @@ class JobService:
 
         return ModalSanaGenerator()
 
+    def _requested_deployed(self, config: JobConfig) -> bool | None:
+        if config.deployed is not None:
+            return config.deployed
+        if self.settings.deployed is True:
+            return True
+        return None
+
     def _execute(self, job_id: str, config: JobConfig, generator: ImageGenerator) -> None:
         with self.db.session() as session:
             pending = list(
@@ -425,7 +432,7 @@ class JobService:
                         workers=config.workers,
                         model=config.model,
                         retry=config.retry,
-                        deployed=config.deployed,
+                        deployed=self._requested_deployed(config),
                     ):
                         generation = inflight.pop(result.generation_id, None)
                         if generation is None:
@@ -750,6 +757,9 @@ def _runtime_fields(tel: dict[str, Any] | None) -> dict[str, Any]:
         "from_snapshot",
         "cpu_load_ms",
         "gpu_move_ms",
+        "deploy_mode",
+        "deployed",
+        "deploy_reason",
     ):
         value = data.get(key)
         if value is None:

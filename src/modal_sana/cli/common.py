@@ -33,7 +33,17 @@ OptFormat = Annotated[str, typer.Option("--format", help="webp | png | jpg")]
 OptQuality = Annotated[int, typer.Option("--quality", help="WebP/JPEG quality")]
 OptNegative = Annotated[str, typer.Option("--negative", help="Negative prompt")]
 OptDryRun = Annotated[bool, typer.Option("--dry-run", help="Local placeholder images, no GPU")]
-OptDeployed = Annotated[bool, typer.Option("--deployed", help="Call a deployed Modal app")]
+OptDeployed = Annotated[
+    bool | None,
+    typer.Option(
+        "--deployed/--ephemeral",
+        help=(
+            "Call the deployed Modal app (snapshots) or force a one-off "
+            "ephemeral app.run(). Default: deployed if it exists. "
+            "This is not modal serve."
+        ),
+    ),
+]
 OptDedup = Annotated[bool, typer.Option("--deduplicate", help="Skip duplicate prompt+config+seed")]
 
 
@@ -62,7 +72,7 @@ def job_config(
     quality: int,
     negative: str,
     dry_run: bool,
-    deployed: bool,
+    deployed: bool | None,
     deduplicate: bool,
 ) -> JobConfig:
     fmt = image_format.lower()
@@ -97,6 +107,12 @@ def print_job_header(job: JobSummary) -> None:
     console.print(f"Model: {job.model}")
     if job.config.dry_run:
         console.print("[yellow]dry-run[/yellow] — local placeholders, Modal is not called")
+    elif job.config.deployed is True:
+        console.print("Modal: [bold]deployed[/bold] (required)")
+    elif job.config.deployed is False:
+        console.print("Modal: [yellow]ephemeral[/yellow] (forced, snapshots off)")
+    else:
+        console.print("Modal: auto — deployed app if it exists, else ephemeral app.run()")
     console.print()
 
 
