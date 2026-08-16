@@ -1,12 +1,31 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from rich.progress import Progress
 
 from modal_sana.cli.prefetch import apply_prefetch_event
 from modal_sana.modal.prefetch import iter_prefetch_events
-from tests.test_weights import write_complete_snapshot
+
+
+def write_complete_snapshot(dest: Path, *, hf_id: str = "org/model") -> None:
+    dest.mkdir(parents=True, exist_ok=True)
+    index = {
+        "_class_name": "SanaPipeline",
+        "transformer": ["SanaTransformer2DModel"],
+        "vae": ["AutoencoderDC"],
+        "text_encoder": ["Gemma2Model"],
+        "scheduler": ["FlowMatchEulerDiscreteScheduler"],
+    }
+    (dest / "model_index.json").write_text(json.dumps(index), encoding="utf-8")
+    for name in ("transformer", "vae", "text_encoder"):
+        folder = dest / name
+        folder.mkdir(exist_ok=True)
+        (folder / "diffusion_pytorch_model.safetensors").write_bytes(b"fake-weights")
+        (folder / "config.json").write_text("{}", encoding="utf-8")
+    (dest / "scheduler").mkdir(exist_ok=True)
+    (dest / "scheduler" / "scheduler_config.json").write_text(json.dumps({"hf": hf_id}), encoding="utf-8")
 
 
 def test_iter_events_cached_does_not_download(tmp_path: Path, monkeypatch) -> None:
