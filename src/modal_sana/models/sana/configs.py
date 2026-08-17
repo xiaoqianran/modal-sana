@@ -17,6 +17,7 @@ SANA_MODELS: tuple[ModelSpec, ...] = (
         recommended_gpu="L40S",
         native_width=1024,
         native_height=1024,
+        recommended_batch=16,
     ),
     ModelSpec(
         id="sana-sprint-0.6b",
@@ -32,6 +33,7 @@ SANA_MODELS: tuple[ModelSpec, ...] = (
         recommended_gpu="L40S",
         native_width=1024,
         native_height=1024,
+        recommended_batch=16,
     ),
     ModelSpec(
         id="sana-1.6b",
