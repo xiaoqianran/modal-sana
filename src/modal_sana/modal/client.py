@@ -47,17 +47,26 @@ def build_worker_options(
     model: str,
     secrets: list[Any] | None = None,
 ) -> dict[str, Any]:
-    """Runtime GPU/model bind. Class decorator ``gpu="L40S"`` is only a fallback."""
+    """Runtime GPU/model bind. Class decorator ``gpu="L40S"`` is only a fallback.
+
+    The default scaledown window is cost-first: two seconds, Modal's minimum.
+    Set MODAL_SANA_SCALEDOWN_SECONDS to keep a warm GPU longer for interactive
+    latency. Idle GPU reservations during this window are billable.
+    """
     import modal
 
     from modal_sana.modal.gpu import get_gpu
-    from modal_sana.modal.worker import SCALEDOWN_SECONDS
 
     spec = get_gpu(gpu)
+    try:
+        scaledown_seconds = int(os.environ.get("MODAL_SANA_SCALEDOWN_SECONDS", "2"))
+    except ValueError:
+        scaledown_seconds = 2
+    scaledown_seconds = min(max(scaledown_seconds, 2), 20 * 60)
     options: dict[str, Any] = {
         "gpu": spec.modal_name,
         "max_containers": max(workers, 1),
-        "scaledown_window": SCALEDOWN_SECONDS,
+        "scaledown_window": scaledown_seconds,
         "retries": modal.Retries(max_retries=max(retry, 0), backoff_coefficient=2.0),
         "env": {
             "MODAL_SANA_REQUESTED_GPU": spec.id,
@@ -323,6 +332,16 @@ def _iter_results(
                 "vram_allocated_mb": item.get("vram_allocated_mb"),
                 "vram_reserved_mb": item.get("vram_reserved_mb"),
                 "vram_peak_mb": item.get("vram_peak_mb"),
+                "vram_peak_reserved_mb": item.get("vram_peak_reserved_mb"),
+                "vram_attempt_peak_mb": item.get("vram_attempt_peak_mb"),
+                "vram_attempt_peak_reserved_mb": item.get("vram_attempt_peak_reserved_mb"),
+                "vram_oom_peak_mb": item.get("vram_oom_peak_mb"),
+                "vram_oom_peak_reserved_mb": item.get("vram_oom_peak_reserved_mb"),
+                "vram_free_mb": item.get("vram_free_mb"),
+                "vram_total_mb": item.get("vram_total_mb"),
+                "batch_size_requested": item.get("batch_size_requested"),
+                "batch_size_effective": item.get("batch_size_effective"),
+                "batch_fallback_reason": item.get("batch_fallback_reason"),
                 "modal_function_call_id": item.get("modal_function_call_id")
                 or batch_ids["modal_function_call_id"],
                 "modal_input_id": item.get("modal_input_id") or batch_ids["modal_input_id"],
