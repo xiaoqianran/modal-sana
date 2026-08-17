@@ -291,7 +291,9 @@ class SanaWorker:
                         **batch_vram,
                     }
                 )
-            _clear_cuda_cache()
+            # Keep the CUDA caching allocator warm on successful batches. This
+            # avoids repeated allocation/synchronization overhead between
+            # batches. OOM and failed paths still clear the cache before retry.
         _stamp_applied(results, items, runtime, self.model_id)
         _publish_cost_events(results, items, runtime, cold=cold, load_ms=load_ms, ids=ids)
         return {"items": results, "runtime": runtime, **ids}
