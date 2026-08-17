@@ -20,6 +20,16 @@ function number(value, digits = 2) {
   return Number(value).toFixed(digits);
 }
 
+function stageRows(inference) {
+  const stages = Object.values(inference?.stages || {});
+  if (!stages.length) return "";
+  return `
+    <div class="check"><span>└ Pipeline 分段</span><strong>新任务开始记录</strong></div>
+    ${stages.map((stage) => `
+      <div class="check"><span>　${stage.label}</span><strong class="mono">${ms(stage.ms)} · ${percent(stage.share_of_inference)} infer · ${money(stage.cost_usd)}</strong></div>
+    `).join("")}`;
+}
+
 function diagnosticPanel(report, title = "成本诊断") {
   const phases = report.phases || {};
   const batch = report.batch || {};
@@ -36,6 +46,7 @@ function diagnosticPanel(report, title = "成本诊断") {
     <div class="check"><span>估算总成本</span><strong class="mono">${money(report.total_cost_usd)} · ${money(report.cost_per_100_images_usd)}/100 张</strong></div>
     <div class="check"><span>GPU 秒 / 图</span><strong class="mono">${number(report.gpu_seconds_per_image, 3)}s</strong></div>
     <div class="check"><span>推理</span><strong class="mono">${ms(phases.inference?.ms)} · ${percent(phases.inference?.share)} · ${money(phases.inference?.cost_usd)}</strong></div>
+    ${stageRows(phases.inference)}
     <div class="check"><span>图片编码（仍占 GPU 容器）</span><strong class="mono">${ms(phases.encode_in_gpu_container?.ms)} · ${percent(phases.encode_in_gpu_container?.share)} · ${money(phases.encode_in_gpu_container?.cost_usd)}</strong></div>
     <div class="check"><span>冷启动 / GPU 搬运</span><strong class="mono">${ms(phases.load?.ms)} · ${percent(phases.load?.share)} · ${money(phases.load?.cost_usd)}</strong></div>
     <div class="check"><span>Batch</span><strong class="mono">请求 ${number(batch.avg_requested)} → 实际 ${number(batch.avg_effective)} · 回退 ${batch.fallback_events || 0} 次</strong></div>
@@ -43,7 +54,7 @@ function diagnosticPanel(report, title = "成本诊断") {
     <div class="diagnosis-findings">
       ${findings.map((item) => `<p class="lede"><strong>${item.title}</strong> · ${item.detail}</p>`).join("")}
     </div>
-    ${report.truncated ? '<p class="lede">该任务事件超过 200 条；当前诊断只读取前 200 条，建议后续增加服务端全量聚合。</p>' : ""}
+    ${report.truncated ? '<p class="lede">该任务事件超过 200 条；当前诊断只读取前 200 条。</p>' : ""}
   `;
   return panel;
 }
