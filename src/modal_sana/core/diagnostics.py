@@ -2,13 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
+_STAGE_LABELS = {
+    "text_encode_ms": "Gemma 文本编码",
+    "transformer_ms": "SANA Transformer",
+    "vae_decode_ms": "VAE 解码",
+    "postprocess_ms": "图像后处理",
+    "pipeline_other_ms": "Pipeline 其他开销",
+}
+
 
 def diagnose_cost_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
     """Turn raw Modal cost events into an actionable per-job performance report.
 
-    The current worker emits one gpu_generate event per image. infer_ms is the
-    batched forward divided across images; encode_ms is per-image CPU encoding
-    that still happens inside the billed GPU container.
+    The worker emits one gpu_generate event per image. infer_ms and fine-grained
+    pipeline timings are per-image shares of a batched forward; encode_ms is
+    per-image CPU compression that still happens inside the billed GPU container.
     """
     items = list(ledger.get("items") or [])
     generated = [item for item in items if item.get("kind") == "gpu_generate"]
@@ -32,6 +40,21 @@ def diagnose_cost_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
     load_cost = sum(f(row, "cost_usd") for row in loads)
     total_cost = sum(f(row, "cost_usd") for row in items)
     gpu_seconds = sum(f(row, "gpu_seconds") for row in items)
+
+    pipeline_stages: dict[str, dict[str, Any]] = {}
+    for key, label in _STAGE_LABELS.items():
+        stage_ms = sum(f(row, key) for row in generated)
+        if stage_ms <= 0:
+            continue
+        stage_cost = phase_cost(generated, key)
+        pipeline_stages[key.removesuffix("_ms")] = {
+            "label": label,
+            "ms": stage_ms,
+            "ms_per_image": stage_ms / images if images else None,
+            "cost_usd": stage_cost,
+            "share_of_inference": stage_ms / infer_ms if infer_ms else 0.0,
+            "share_of_total_cost": stage_cost / total_cost if total_cost else 0.0,
+        }
 
     requested = [
         int(row.get("batch_size_requested") or 0)
@@ -99,13 +122,24 @@ def diagnose_cost_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
                 "detail": f"平均 effective batch 为 {sum(effective) / len(effective):.2f}。",
             }
         )
+    if pipeline_stages:
+        hotspot = max(pipeline_stages.values(), key=lambda item: float(item["share_of_inference"]))
+        if float(hotspot["share_of_inference"]) >= 0.40:
+            findings.append(
+                {
+                    "severity": "medium",
+                    "code": "pipeline_stage_hotspot",
+                    "title": f"推理主要慢在{hotspot['label']}",
+                    "detail": f"约占 infer_ms 的 {float(hotspot['share_of_inference']) * 100:.1f}% 。",
+                }
+            )
     if not findings:
         findings.append(
             {
                 "severity": "info",
                 "code": "no_single_hotspot",
                 "title": "没有单一异常项占据主要成本",
-                "detail": "继续比较 infer_ms/图、有效 batch 与显存峰值。",
+                "detail": "继续比较阶段耗时、有效 batch 与显存峰值。",
             }
         )
 
@@ -126,6 +160,7 @@ def diagnose_cost_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
                 "ms_per_image": infer_ms / images if images else None,
                 "cost_usd": infer_cost,
                 "share": infer_cost / total_cost if total_cost else 0.0,
+                "stages": pipeline_stages,
             },
             "encode_in_gpu_container": {
                 "ms": encode_ms,
