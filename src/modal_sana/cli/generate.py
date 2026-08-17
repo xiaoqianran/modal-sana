@@ -36,7 +36,7 @@ def generate(
     width: OptWidth = None,
     height: OptHeight = None,
     seed: OptSeed = None,
-    batch_size: OptBatch = 4,
+    batch_size: OptBatch = None,
     workers: OptWorkers = 1,
     retry: OptRetry = 3,
     image_format: OptFormat = "png",

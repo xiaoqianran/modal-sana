@@ -20,7 +20,7 @@ class JobConfig(BaseModel):
     guidance: float | None = None
     seed: int | None = None
     count: int = 1
-    batch_size: int = 4
+    batch_size: int | None = None
     workers: int = 1
     retry: int = 3
     image_format: ImageFormat = "png"

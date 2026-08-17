@@ -45,6 +45,27 @@ def get_gpu(gpu_id: str) -> GPUSpec:
     return GPUS[key]
 
 
+def recommended_batch_size(model_id: str, gpu_id: str) -> int:
+    """Conservative auto batch = model-side cap clipped by GPU capacity hint.
+
+    Model caps protect high-resolution / large checkpoints; GPU hints keep small
+    cards from inheriting a batch chosen for L40S/H100-class devices.  This is
+    intentionally a starting point, not a claim that every prompt uses the same
+    amount of activation memory.  Worker telemetry records the real peak.
+    """
+    from modal_sana.models.sana.registry import get_model
+
+    model = get_model(model_id)
+    gpu = get_gpu(gpu_id)
+    return max(1, min(int(model.recommended_batch), int(gpu.recommended_batch)))
+
+
+def resolve_batch_size(model_id: str, gpu_id: str, requested: int | None) -> int:
+    if requested is None or int(requested) <= 0:
+        return recommended_batch_size(model_id, gpu_id)
+    return max(1, int(requested))
+
+
 def list_gpus() -> list[GPUSpec]:
     return list(GPUS.values())
 

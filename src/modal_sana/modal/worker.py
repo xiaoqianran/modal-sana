@@ -192,13 +192,41 @@ class SanaWorker:
             runtime = {**self._runtime, **{k: v for k, v in runtime.items() if v is not None}}
 
         for (width, height, steps, guidance, image_format, quality), group in grouped.items():
+            batch_meta = {
+                "batch_size_requested": len(group),
+                "batch_size_effective": len(group),
+                "batch_fallback_reason": None,
+            }
             try:
-                infer_ms, images = self._infer_group(group, width, height, steps, guidance)
+                infer_ms, images, batch_meta = self._infer_group(
+                    group, width, height, steps, guidance
+                )
                 error = None
             except Exception as exc:  # noqa: BLE001 — surface to local job state
                 infer_ms = 0.0
                 images = []
                 error = str(exc)
+                batch_meta = {
+                    **batch_meta,
+                    "batch_size_effective": 0,
+                    "batch_fallback_reason": f"{type(exc).__name__}: {exc}",
+                }
+            batch_vram = {
+                key: batch_meta.get(key)
+                for key in (
+                    "vram_allocated_mb",
+                    "vram_reserved_mb",
+                    "vram_peak_mb",
+                    "vram_peak_reserved_mb",
+                    "vram_free_mb",
+                    "vram_total_mb",
+                    "vram_attempt_peak_mb",
+                    "vram_attempt_peak_reserved_mb",
+                    "vram_oom_peak_mb",
+                    "vram_oom_peak_reserved_mb",
+                )
+                if key in batch_meta
+            }
 
             if error:
                 per_infer = infer_ms / max(len(group), 1)
@@ -225,9 +253,11 @@ class SanaWorker:
                             "encode_ms": 0.0,
                             "gpu_seconds": gpu_seconds,
                             "cold_start": cold,
-                            **_vram_stats(),
+                            **batch_meta,
+                            **batch_vram,
                         }
                     )
+                _clear_cuda_cache()
                 continue
 
             per_infer = infer_ms / max(len(images), 1)
@@ -257,10 +287,11 @@ class SanaWorker:
                         "encode_ms": encode_ms,
                         "gpu_seconds": gpu_seconds,
                         "cold_start": cold,
-                        **_vram_stats(),
+                        **batch_meta,
+                        **batch_vram,
                     }
                 )
-            torch.cuda.empty_cache()
+            _clear_cuda_cache()
         _stamp_applied(results, items, runtime, self.model_id)
         _publish_cost_events(results, items, runtime, cold=cold, load_ms=load_ms, ids=ids)
         return {"items": results, "runtime": runtime, **ids}
@@ -272,13 +303,127 @@ class SanaWorker:
             torch.cuda.synchronize()
         started = time.perf_counter()
         try:
-            images = self._run_group(group, width, height, steps, guidance)
+            images, batch_meta = self._run_group(group, width, height, steps, guidance)
         finally:
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
-        return (time.perf_counter() - started) * 1000, images
+        return (time.perf_counter() - started) * 1000, images, batch_meta
 
     def _run_group(self, group: list[dict[str, Any]], width: int, height: int, steps: int, guidance: float):
+        """Run the largest safe batch and keep success/OOM memory peaks separate.
+
+        ``vram_peak_*`` describes the largest *successful* effective sub-batch.
+        ``vram_attempt_peak_*`` includes failed oversized attempts, while
+        ``vram_oom_peak_*`` isolates CUDA OOM attempts.  This distinction makes
+        the telemetry useful for tuning instead of making a BS=4 fallback look
+        like it actually consumed the failed BS=8 peak.
+        """
+        requested = len(group)
+        _reset_vram_peak_stats()
+        try:
+            images = self._pipe_group(group, width, height, steps, guidance)
+            success = _vram_stats()
+            return images, {
+                "batch_size_requested": requested,
+                "batch_size_effective": requested,
+                "batch_fallback_reason": None,
+                **success,
+                "vram_attempt_peak_mb": success.get("vram_peak_mb"),
+                "vram_attempt_peak_reserved_mb": success.get("vram_peak_reserved_mb"),
+                "vram_oom_peak_mb": None,
+                "vram_oom_peak_reserved_mb": None,
+            }
+        except Exception as exc:
+            failed = _vram_stats()
+            if requested <= 1:
+                raise
+            if _is_cuda_oom(exc):
+                _clear_cuda_cache()
+                middle = max(1, requested // 2)
+                chunks = (group[:middle], group[middle:])
+                images: list[Any] = []
+                metas: list[dict[str, Any]] = []
+                for chunk in chunks:
+                    if not chunk:
+                        continue
+                    chunk_images, meta = self._run_group(chunk, width, height, steps, guidance)
+                    images.extend(chunk_images)
+                    metas.append(meta)
+                effective = max((int(meta.get("batch_size_effective") or 1) for meta in metas), default=1)
+                success = _merge_vram_stats(metas)
+                return images, {
+                    "batch_size_requested": requested,
+                    "batch_size_effective": effective,
+                    "batch_fallback_reason": "cuda_oom",
+                    **success,
+                    "vram_attempt_peak_mb": _max_number(
+                        failed.get("vram_peak_mb"),
+                        *(meta.get("vram_attempt_peak_mb") for meta in metas),
+                    ),
+                    "vram_attempt_peak_reserved_mb": _max_number(
+                        failed.get("vram_peak_reserved_mb"),
+                        *(meta.get("vram_attempt_peak_reserved_mb") for meta in metas),
+                    ),
+                    "vram_oom_peak_mb": _max_number(
+                        failed.get("vram_peak_mb"),
+                        *(meta.get("vram_oom_peak_mb") for meta in metas),
+                    ),
+                    "vram_oom_peak_reserved_mb": _max_number(
+                        failed.get("vram_peak_reserved_mb"),
+                        *(meta.get("vram_oom_peak_reserved_mb") for meta in metas),
+                    ),
+                }
+
+            # Keep the old compatibility fallback for pipelines that reject list
+            # inputs/generators for reasons unrelated to memory. Measure every
+            # successful scalar call separately and report the largest peak.
+            images = []
+            metas = []
+            for item in group:
+                _reset_vram_peak_stats()
+                images.extend(self._pipe_single(item, width, height, steps, guidance))
+                stats = _vram_stats()
+                metas.append(
+                    {
+                        **stats,
+                        "vram_attempt_peak_mb": stats.get("vram_peak_mb"),
+                        "vram_attempt_peak_reserved_mb": stats.get("vram_peak_reserved_mb"),
+                    }
+                )
+            success = _merge_vram_stats(metas)
+            return images, {
+                "batch_size_requested": requested,
+                "batch_size_effective": 1,
+                "batch_fallback_reason": type(exc).__name__,
+                **success,
+                "vram_attempt_peak_mb": _max_number(
+                    failed.get("vram_peak_mb"),
+                    *(meta.get("vram_attempt_peak_mb") for meta in metas),
+                ),
+                "vram_attempt_peak_reserved_mb": _max_number(
+                    failed.get("vram_peak_reserved_mb"),
+                    *(meta.get("vram_attempt_peak_reserved_mb") for meta in metas),
+                ),
+                "vram_oom_peak_mb": None,
+                "vram_oom_peak_reserved_mb": None,
+            }
+
+    def _pipe_single(self, item: dict[str, Any], width: int, height: int, steps: int, guidance: float):
+        import torch
+
+        kwargs: dict[str, Any] = {
+            "prompt": item["prompt"],
+            "height": height,
+            "width": width,
+            "num_inference_steps": steps,
+            "guidance_scale": guidance,
+            "generator": torch.Generator(device="cuda").manual_seed(int(item["seed"])),
+        }
+        if item.get("negative_prompt"):
+            kwargs["negative_prompt"] = item["negative_prompt"]
+        return self.pipe(**kwargs).images
+
+    def _pipe_group(self, group: list[dict[str, Any]], width: int, height: int, steps: int, guidance: float):
         import torch
 
         prompts = [item["prompt"] for item in group]
@@ -296,23 +441,7 @@ class SanaWorker:
         }
         if any(negatives):
             kwargs["negative_prompt"] = negatives
-        try:
-            return self.pipe(**kwargs).images
-        except Exception:
-            images = []
-            for item, generator in zip(group, generators, strict=True):
-                single = {
-                    "prompt": item["prompt"],
-                    "height": height,
-                    "width": width,
-                    "num_inference_steps": steps,
-                    "guidance_scale": guidance,
-                    "generator": generator,
-                }
-                if item.get("negative_prompt"):
-                    single["negative_prompt"] = item["negative_prompt"]
-                images.extend(self.pipe(**single).images)
-            return images
+        return self.pipe(**kwargs).images
 
 
 def _stamp_applied(
@@ -388,6 +517,9 @@ def _publish_cost_events(
                 "vram_allocated_mb": runtime.get("vram_allocated_mb"),
                 "vram_reserved_mb": runtime.get("vram_reserved_mb"),
                 "vram_peak_mb": runtime.get("vram_peak_mb"),
+                "vram_peak_reserved_mb": runtime.get("vram_peak_reserved_mb"),
+                "vram_free_mb": runtime.get("vram_free_mb"),
+                "vram_total_mb": runtime.get("vram_total_mb"),
                 "source": "modal-worker",
             }
         )
@@ -416,6 +548,15 @@ def _publish_cost_events(
                 "vram_allocated_mb": row.get("vram_allocated_mb"),
                 "vram_reserved_mb": row.get("vram_reserved_mb"),
                 "vram_peak_mb": row.get("vram_peak_mb"),
+                "vram_peak_reserved_mb": row.get("vram_peak_reserved_mb"),
+                "vram_attempt_peak_mb": row.get("vram_attempt_peak_mb"),
+                "vram_attempt_peak_reserved_mb": row.get("vram_attempt_peak_reserved_mb"),
+                "vram_oom_peak_mb": row.get("vram_oom_peak_mb"),
+                "vram_oom_peak_reserved_mb": row.get("vram_oom_peak_reserved_mb"),
+                "vram_free_mb": row.get("vram_free_mb"),
+                "vram_total_mb": row.get("vram_total_mb"),
+                "batch_size_requested": row.get("batch_size_requested"),
+                "batch_size_effective": row.get("batch_size_effective"),
                 "width": row.get("width") or item.get("width"),
                 "height": row.get("height") or item.get("height"),
                 "steps": item.get("steps"),
@@ -490,22 +631,91 @@ def _call_ids() -> dict[str, Any]:
     }
 
 
+def _max_number(*values: Any) -> float | None:
+    numbers = [float(value) for value in values if value is not None]
+    return max(numbers) if numbers else None
+
+
+def _merge_vram_stats(metas: list[dict[str, Any]]) -> dict[str, float | None]:
+    """Aggregate successful sub-batches without mixing in failed OOM peaks."""
+    if not metas:
+        return _vram_stats()
+    return {
+        "vram_allocated_mb": _max_number(*(meta.get("vram_allocated_mb") for meta in metas)),
+        "vram_reserved_mb": _max_number(*(meta.get("vram_reserved_mb") for meta in metas)),
+        "vram_peak_mb": _max_number(*(meta.get("vram_peak_mb") for meta in metas)),
+        "vram_peak_reserved_mb": _max_number(*(meta.get("vram_peak_reserved_mb") for meta in metas)),
+        "vram_free_mb": min(
+            (float(meta["vram_free_mb"]) for meta in metas if meta.get("vram_free_mb") is not None),
+            default=None,
+        ),
+        "vram_total_mb": _max_number(*(meta.get("vram_total_mb") for meta in metas)),
+    }
+
+
 def _vram_stats() -> dict[str, float | None]:
-    """Current GPU memory. Allocated = live tensors; reserved ≈ nvidia-smi; peak = high water."""
-    empty = {"vram_allocated_mb": None, "vram_reserved_mb": None, "vram_peak_mb": None}
+    """CUDA allocator + device memory snapshot for one load/batch boundary."""
+    empty = {
+        "vram_allocated_mb": None,
+        "vram_reserved_mb": None,
+        "vram_peak_mb": None,
+        "vram_peak_reserved_mb": None,
+        "vram_free_mb": None,
+        "vram_total_mb": None,
+    }
     try:
         import torch
 
         if not torch.cuda.is_available():
             return empty
         scale = 1024.0 * 1024.0
+        free, total = torch.cuda.mem_get_info()
+        max_reserved = getattr(torch.cuda, "max_memory_reserved", None)
         return {
             "vram_allocated_mb": torch.cuda.memory_allocated() / scale,
             "vram_reserved_mb": torch.cuda.memory_reserved() / scale,
             "vram_peak_mb": torch.cuda.max_memory_allocated() / scale,
+            "vram_peak_reserved_mb": (max_reserved() / scale) if max_reserved else None,
+            "vram_free_mb": free / scale,
+            "vram_total_mb": total / scale,
         }
     except Exception:
         return empty
+
+
+def _reset_vram_peak_stats() -> None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+    except Exception:
+        return
+
+
+def _clear_cuda_cache() -> None:
+    try:
+        import gc
+        import torch
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        return
+
+
+def _is_cuda_oom(exc: BaseException) -> bool:
+    try:
+        import torch
+
+        oom_type = getattr(torch.cuda, "OutOfMemoryError", None)
+        if oom_type is not None and isinstance(exc, oom_type):
+            return True
+    except Exception:
+        pass
+    text = str(exc).lower()
+    return "cuda" in text and "out of memory" in text
 
 
 def _vram_mb() -> float | None:

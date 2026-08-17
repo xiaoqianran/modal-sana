@@ -26,7 +26,7 @@ OptGuidance = Annotated[float | None, typer.Option("--guidance", help="Guidance 
 OptWidth = Annotated[int | None, typer.Option("--width", help="Image width. Default: model native.")]
 OptHeight = Annotated[int | None, typer.Option("--height", help="Image height. Default: model native.")]
 OptSeed = Annotated[int | None, typer.Option("--seed", help="Base seed; count expands +1")]
-OptBatch = Annotated[int, typer.Option("--batch-size", help="Images per GPU forward")]
+OptBatch = Annotated[int | None, typer.Option("--batch-size", help="Images per GPU forward. Default: auto from model + GPU.")]
 OptWorkers = Annotated[int, typer.Option("--workers", help="Max parallel GPU containers. Default 1 (one GPU).")]
 OptRetry = Annotated[int, typer.Option("--retry", help="Local retries after Modal gives up")]
 OptFormat = Annotated[str, typer.Option("--format", help="png | jpg | webp")]
@@ -64,7 +64,7 @@ def job_config(
     width: int | None,
     height: int | None,
     seed: int | None,
-    batch_size: int,
+    batch_size: int | None,
     workers: int,
     retry: int,
     image_format: str,
@@ -79,6 +79,7 @@ def job_config(
         fmt = "jpg"
     if fmt not in {"webp", "png", "jpg"}:
         raise typer.BadParameter("format must be webp, png, or jpg")
+    from modal_sana.modal.gpu import resolve_batch_size
     from modal_sana.models.sana.registry import get_model
 
     spec = get_model(model)
@@ -91,7 +92,7 @@ def job_config(
         width=width or spec.native_width,
         height=height or spec.native_height,
         seed=seed,
-        batch_size=batch_size,
+        batch_size=resolve_batch_size(model, gpu, batch_size),
         workers=workers,
         retry=retry,
         image_format=fmt,  # type: ignore[arg-type]

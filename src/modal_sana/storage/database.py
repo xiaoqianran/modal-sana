@@ -110,6 +110,11 @@ class GenerationRow(SQLModel, table=True):
     vram_allocated_mb: float | None = None
     vram_reserved_mb: float | None = None
     vram_peak_mb: float | None = None
+    vram_peak_reserved_mb: float | None = None
+    vram_free_mb: float | None = None
+    vram_total_mb: float | None = None
+    batch_size_requested: int | None = None
+    batch_size_effective: int | None = None
     extra_json: str | None = None
 
 
@@ -167,6 +172,11 @@ _GENERATION_MIGRATIONS = {
     "vram_allocated_mb": "FLOAT",
     "vram_reserved_mb": "FLOAT",
     "vram_peak_mb": "FLOAT",
+    "vram_peak_reserved_mb": "FLOAT",
+    "vram_free_mb": "FLOAT",
+    "vram_total_mb": "FLOAT",
+    "batch_size_requested": "INTEGER",
+    "batch_size_effective": "INTEGER",
     "extra_json": "TEXT",
 }
 

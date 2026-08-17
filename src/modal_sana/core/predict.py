@@ -5,7 +5,7 @@ from statistics import median
 from typing import Any
 
 from modal_sana.core.ledger import CostEvent
-from modal_sana.modal.gpu import get_gpu
+from modal_sana.modal.gpu import get_gpu, resolve_batch_size
 from modal_sana.models.sana.registry import get_model
 
 # Cold ``from_pretrained`` + ``.to("cuda")`` after weights are already on the Volume.
@@ -50,7 +50,7 @@ def predict_run(
     width: int = 1024,
     height: int = 1024,
     steps: int | None = None,
-    batch_size: int = 4,
+    batch_size: int | None = None,
     workers: int = 1,
     history: list[CostEvent] | None = None,
 ) -> dict[str, Any]:
@@ -59,7 +59,7 @@ def predict_run(
     model_spec = get_model(model)
     resolved_steps = int(steps if steps is not None else model_spec.default_steps)
     n = max(int(count), 1)
-    batch = max(int(batch_size), 1)
+    batch = resolve_batch_size(model, gpu, batch_size)
     n_workers = max(int(workers), 1)
     containers = min(n_workers, max(1, ceil(n / batch)))
     pixels = max(int(width), 1) * max(int(height), 1)

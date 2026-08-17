@@ -14,7 +14,7 @@ def benchmark(
     gpus: Annotated[str, typer.Option("--gpu", help="Comma-separated GPU ids")] = "L40S,RTX-PRO-6000",
     model: Annotated[str, typer.Option("--model")] = "sana-sprint-1.6b",
     count: Annotated[int, typer.Option("--count", "-n")] = 8,
-    batch_size: Annotated[int, typer.Option("--batch-size")] = 4,
+    batch_size: Annotated[int | None, typer.Option("--batch-size", help="Default: auto per GPU/model")] = None,
     workers: Annotated[int, typer.Option("--workers")] = 1,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     prompt: Annotated[str, typer.Option("--prompt")] = "a cinematic photo of a red bicycle in the rain",
@@ -24,6 +24,8 @@ def benchmark(
     table = Table(title="Benchmark")
     table.add_column("GPU")
     table.add_column("IMAGES")
+    table.add_column("BATCH")
+    table.add_column("VRAM PEAK")
     table.add_column("SEC")
     table.add_column("IMG/S")
     table.add_column("SEC/IMG")
@@ -60,12 +62,29 @@ def benchmark(
         try:
             final = svc.run_job(job.id)
         except Exception as exc:  # noqa: BLE001
-            table.add_row(gpu_id, "0", "-", "-", "-", "-", "-", str(exc))
+            table.add_row(gpu_id, "0", "-", "-", "-", "-", "-", "-", "-", str(exc))
             continue
         elapsed = 0.0
         if final.started_at and final.completed_at:
             elapsed = (final.completed_at - final.started_at).total_seconds()
         images = max(final.completed_images, 0)
+        detail = svc.get_job_detail(final.id)
+        rows = detail.get("generations") or []
+        effective_batches = [int(row.get("batch_size_effective") or 0) for row in rows]
+        effective_batch = max(effective_batches, default=int(final.config.batch_size or 1))
+        peaks = [
+            float(row.get("vram_peak_reserved_mb") or row.get("vram_peak_mb") or 0.0)
+            for row in rows
+        ]
+        totals = [float(row.get("vram_total_mb") or 0.0) for row in rows]
+        peak_mb = max(peaks, default=0.0)
+        total_mb = max(totals, default=0.0)
+        if peak_mb:
+            vram_text = f"{peak_mb / 1024:.1f}G"
+            if total_mb:
+                vram_text += f"/{total_mb / 1024:.0f}G"
+        else:
+            vram_text = "-"
         ips = images / elapsed if elapsed else 0.0
         spi = elapsed / images if images else 0.0
         cost = estimate_cost_usd(gpu_id, elapsed)
@@ -73,6 +92,8 @@ def benchmark(
         table.add_row(
             gpu_id,
             str(images),
+            str(effective_batch),
+            vram_text,
             f"{elapsed:.2f}",
             f"{ips:.2f}",
             f"{spi:.3f}",
