@@ -26,6 +26,11 @@ class CostEvent:
     load_ms: float | None = None
     infer_ms: float | None = None
     encode_ms: float | None = None
+    text_encode_ms: float | None = None
+    transformer_ms: float | None = None
+    vae_decode_ms: float | None = None
+    postprocess_ms: float | None = None
+    pipeline_other_ms: float | None = None
     vram_allocated_mb: float | None = None
     vram_reserved_mb: float | None = None
     vram_peak_mb: float | None = None
