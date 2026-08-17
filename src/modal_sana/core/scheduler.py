@@ -4,6 +4,7 @@ from collections.abc import Iterator
 
 from modal_sana.core.batcher import build_batches
 from modal_sana.core.generator import GenerateRequest, GenerateResult, ImageGenerator
+from modal_sana.modal.gpu import resolve_batch_size
 from modal_sana.storage.database import GenerationRow
 
 
@@ -32,17 +33,22 @@ def run_batches(
     generations: list[GenerationRow],
     generator: ImageGenerator,
     *,
-    batch_size: int,
+    batch_size: int | None,
     gpu: str,
     workers: int,
     model: str,
     retry: int,
     deployed: bool | None,
 ) -> Iterator[GenerateResult]:
-    """Fan-out helper. Modal does the real scheduling via .map()."""
+    """Fan-out helper. Modal does the real scheduling via .map().
+
+    Resolve auto batching here as the final backend guard so direct JobService
+    callers, Web/API clients and CLI all share the same model × GPU policy.
+    """
+    resolved_batch = resolve_batch_size(model, gpu, batch_size)
     batches = [
         requests_from_generations(chunk)
-        for chunk in build_batches(generations, batch_size)
+        for chunk in build_batches(generations, resolved_batch)
     ]
     yield from generator.generate_batches(
         batches,
