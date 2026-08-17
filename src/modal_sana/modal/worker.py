@@ -27,6 +27,13 @@ SCALEDOWN_SECONDS = 10
 # CPU memory snapshots (deployed only). Not GPU VRAM snapshots — those do not
 # help when the bottleneck is reading weights off a Volume.
 MEMORY_SNAPSHOT = True
+_STAGE_KEYS = (
+    "text_encode_ms",
+    "transformer_ms",
+    "vae_decode_ms",
+    "postprocess_ms",
+    "pipeline_other_ms",
+)
 
 
 def _dtype(name: str):
@@ -94,6 +101,95 @@ def _encode(image, image_format: str, quality: int) -> bytes:
     return encode_image(image, image_format, quality)
 
 
+def _install_stage_profiler(pipe: Any) -> tuple[dict[str, Any], list[tuple[Any, str, Any]]]:
+    """Instrument major pipeline stages without synchronizing after each stage.
+
+    CUDA events are queued on the current stream and read only after the outer
+    batch synchronization, so profiling does not insert a device barrier between
+    text encoding, transformer steps and VAE decode. CPU postprocess is measured
+    with perf_counter because it is predominantly host-side work.
+    """
+    import torch
+
+    state: dict[str, Any] = {"cuda_events": [], "wall_ms": {}}
+    originals: list[tuple[Any, str, Any]] = []
+
+    def wrap_cuda(obj: Any, attr: str, key: str) -> None:
+        if obj is None or not hasattr(obj, attr):
+            return
+        original = getattr(obj, attr)
+
+        def wrapped(*args: Any, **kwargs: Any):
+            if not torch.cuda.is_available():
+                started = time.perf_counter()
+                try:
+                    return original(*args, **kwargs)
+                finally:
+                    state["wall_ms"][key] = state["wall_ms"].get(key, 0.0) + (
+                        time.perf_counter() - started
+                    ) * 1000.0
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+            start_event.record()
+            try:
+                return original(*args, **kwargs)
+            finally:
+                end_event.record()
+                state["cuda_events"].append((key, start_event, end_event))
+
+        originals.append((obj, attr, original))
+        setattr(obj, attr, wrapped)
+
+    def wrap_wall(obj: Any, attr: str, key: str) -> None:
+        if obj is None or not hasattr(obj, attr):
+            return
+        original = getattr(obj, attr)
+
+        def wrapped(*args: Any, **kwargs: Any):
+            started = time.perf_counter()
+            try:
+                return original(*args, **kwargs)
+            finally:
+                state["wall_ms"][key] = state["wall_ms"].get(key, 0.0) + (
+                    time.perf_counter() - started
+                ) * 1000.0
+
+        originals.append((obj, attr, original))
+        setattr(obj, attr, wrapped)
+
+    wrap_cuda(pipe, "encode_prompt", "text_encode_ms")
+    wrap_cuda(getattr(pipe, "transformer", None), "forward", "transformer_ms")
+    wrap_cuda(getattr(pipe, "vae", None), "decode", "vae_decode_ms")
+    wrap_wall(getattr(pipe, "image_processor", None), "postprocess", "postprocess_ms")
+    return state, originals
+
+
+def _finish_stage_profiler(
+    state: dict[str, Any], originals: list[tuple[Any, str, Any]]
+) -> dict[str, float]:
+    totals = {key: float(value) for key, value in (state.get("wall_ms") or {}).items()}
+    for key, start_event, end_event in state.get("cuda_events") or []:
+        try:
+            totals[key] = totals.get(key, 0.0) + float(start_event.elapsed_time(end_event))
+        except Exception:
+            continue
+    for obj, attr, original in reversed(originals):
+        try:
+            setattr(obj, attr, original)
+        except Exception:
+            pass
+    return totals
+
+
+def _per_image_stage_meta(batch_meta: dict[str, Any], count: int) -> dict[str, float]:
+    n = max(int(count), 1)
+    return {
+        key: float(batch_meta.get(key) or 0.0) / n
+        for key in _STAGE_KEYS
+        if batch_meta.get(key) is not None
+    }
+
+
 @app.cls(
     image=image,
     gpu="L40S",
@@ -159,8 +255,6 @@ class SanaWorker:
 
     @modal.method()
     def generate_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
-        import torch
-
         items = payload.get("items") or []
         results: list[dict[str, Any]] = []
         if not items:
@@ -230,6 +324,7 @@ class SanaWorker:
 
             if error:
                 per_infer = infer_ms / max(len(group), 1)
+                per_stage = _per_image_stage_meta(batch_meta, len(group))
                 for item in group:
                     gpu_seconds = item_gpu_seconds(
                         load_ms=load_ms,
@@ -254,6 +349,7 @@ class SanaWorker:
                             "gpu_seconds": gpu_seconds,
                             "cold_start": cold,
                             **batch_meta,
+                            **per_stage,
                             **batch_vram,
                         }
                     )
@@ -261,6 +357,7 @@ class SanaWorker:
                 continue
 
             per_infer = infer_ms / max(len(images), 1)
+            per_stage = _per_image_stage_meta(batch_meta, len(images))
             for item, image in zip(group, images, strict=False):
                 encode_started = time.perf_counter()
                 encoded = _encode(image, image_format, quality)
@@ -288,6 +385,7 @@ class SanaWorker:
                         "gpu_seconds": gpu_seconds,
                         "cold_start": cold,
                         **batch_meta,
+                        **per_stage,
                         **batch_vram,
                     }
                 )
@@ -303,13 +401,20 @@ class SanaWorker:
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()
+        profiler, originals = _install_stage_profiler(self.pipe)
         started = time.perf_counter()
         try:
             images, batch_meta = self._run_group(group, width, height, steps, guidance)
         finally:
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
-        return (time.perf_counter() - started) * 1000, images, batch_meta
+            stage_meta = _finish_stage_profiler(profiler, originals)
+        infer_ms = (time.perf_counter() - started) * 1000
+        for key in _STAGE_KEYS[:-1]:
+            batch_meta[key] = float(stage_meta.get(key) or 0.0)
+        measured = sum(float(batch_meta.get(key) or 0.0) for key in _STAGE_KEYS[:-1])
+        batch_meta["pipeline_other_ms"] = max(infer_ms - measured, 0.0)
+        return infer_ms, images, batch_meta
 
     def _run_group(self, group: list[dict[str, Any]], width: int, height: int, steps: int, guidance: float):
         """Run the largest safe batch and keep success/OOM memory peaks separate.
@@ -547,6 +652,11 @@ def _publish_cost_events(
                 "load_ms": 0.0,
                 "infer_ms": infer_ms,
                 "encode_ms": encode_ms,
+                "text_encode_ms": row.get("text_encode_ms"),
+                "transformer_ms": row.get("transformer_ms"),
+                "vae_decode_ms": row.get("vae_decode_ms"),
+                "postprocess_ms": row.get("postprocess_ms"),
+                "pipeline_other_ms": row.get("pipeline_other_ms"),
                 "vram_allocated_mb": row.get("vram_allocated_mb"),
                 "vram_reserved_mb": row.get("vram_reserved_mb"),
                 "vram_peak_mb": row.get("vram_peak_mb"),
