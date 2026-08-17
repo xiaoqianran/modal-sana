@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from modal_sana import __version__
 from modal_sana.core.config import load_settings
+from modal_sana.core.diagnostics import diagnose_cost_ledger
 from modal_sana.core.doctor import run_doctor
 from modal_sana.core.events import EventBus
 from modal_sana.core.jobs import JobService
@@ -20,7 +21,7 @@ from modal_sana.core.prompts import parse_prompt_file, parse_prompt_text
 from modal_sana.modal.billing import workspace_balance
 from modal_sana.modal.client import ensure_local_app_objects
 from modal_sana.modal.deploy_mode import inspect_deploy_target
-from modal_sana.modal.gpu import list_gpus
+from modal_sana.modal.gpu import list_gpus, resolve_batch_size
 from modal_sana.modal.ledger import load_dict_events, safe_query_shared_ledger
 from modal_sana.models.sana.registry import get_model, list_models
 from modal_sana.schemas.job import JobConfig, PromptSpec
@@ -57,7 +58,7 @@ class CreateJobBody(BaseModel):
     steps: int | None = None
     guidance: float | None = None
     seed: int | None = None
-    batch_size: int = 4
+    batch_size: int | None = None
     workers: int = 1
     retry: int = 3
     image_format: Literal["webp", "png", "jpg"] = "png"
@@ -79,7 +80,7 @@ def _config_from_body(body: CreateJobBody) -> JobConfig:
         guidance=body.guidance,
         seed=body.seed,
         count=body.count,
-        batch_size=body.batch_size,
+        batch_size=resolve_batch_size(body.model, body.gpu, body.batch_size),
         workers=body.workers,
         retry=body.retry,
         image_format=body.image_format,
@@ -153,7 +154,7 @@ def cost_forecast(
     width: int = Query(1024, ge=256, le=4096),
     height: int = Query(1024, ge=256, le=4096),
     steps: int | None = Query(None, ge=1, le=200),
-    batch_size: int = Query(4, ge=1, le=64),
+    batch_size: int | None = Query(None, ge=1, le=64),
     workers: int = Query(1, ge=1, le=32),
     period: str = "day",
     page: int = Query(1, ge=1),
@@ -182,7 +183,7 @@ def cost_forecast(
             width=width,
             height=height,
             steps=steps,
-            batch_size=batch_size,
+            batch_size=resolve_batch_size(model, gpu, batch_size),
             workers=workers,
             history=history,
         )
@@ -227,6 +228,17 @@ def cost_balance() -> dict[str, Any]:
     return workspace_balance()
 
 
+@router.get("/cost/diagnose")
+def cost_diagnose(job_id: str) -> dict[str, Any]:
+    ledger = safe_query_shared_ledger(
+        period="all", page=1, per_page=200, job_id=job_id
+    )
+    report = diagnose_cost_ledger(ledger)
+    if ledger.get("error"):
+        report["ledger_error"] = ledger["error"]
+    return report
+
+
 @router.get("/doctor")
 def doctor(quick: bool = False) -> dict[str, Any]:
     report = run_doctor(remote=not quick)
@@ -258,7 +270,7 @@ async def create_job_from_file(
     steps: int | None = None,
     guidance: float | None = None,
     seed: int | None = None,
-    batch_size: int = 4,
+    batch_size: int | None = None,
     workers: int = 1,
     dry_run: bool = False,
     deployed: bool | None = None,
@@ -284,7 +296,7 @@ async def create_job_from_file(
         steps=steps,
         guidance=guidance,
         seed=seed,
-        batch_size=batch_size,
+        batch_size=resolve_batch_size(model, gpu, batch_size),
         workers=workers,
         dry_run=dry_run,
         deployed=deployed,
@@ -344,7 +356,7 @@ def cancel_job(job_id: str) -> dict[str, Any]:
     try:
         return _service.cancel(job_id).model_dump(mode="json")
     except KeyError as exc:
-        raise HTTPException(404, f"unknown job {job_id}") from exc
+        raise HTTPException(404, str(exc)) from exc
 
 
 @router.get("/jobs/{job_id}/events")
